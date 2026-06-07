@@ -68,13 +68,13 @@ class AIAssistant:
                     "### ElectraSim Assistant Response\n"
                     "I am currently running in local mode (no OpenAI API key detected).\n\n"
                     "**Ohm's Law:**\n"
-                    "$$V = I \\times R$$\n\n"
+                    "V = I * R\n\n"
                     "**Kirchhoff's Current Law (KCL):**\n"
                     "The algebraic sum of currents entering any node is zero:\n"
-                    "$$\\sum_{k=1}^{n} I_k = 0$$\n\n"
+                    "∑ I_k = 0\n\n"
                     "**Kirchhoff's Voltage Law (KVL):**\n"
                     "The algebraic sum of voltage drops around any closed loop is zero:\n"
-                    "$$\\sum_{k=1}^{m} V_k = 0$$\n\n"
+                    "∑ V_k = 0\n\n"
                     "Please load a circuit schematic in the Circuit Design Studio to get a live, step-by-step symbolic derivation of your node equations!"
                 ),
                 "steps": ["Initialized local formula reference"]
@@ -134,7 +134,7 @@ class AIAssistant:
                 # If there are voltage sources connected to this node, KCL requires a helper variable (source current)
                 # To keep local solver simple, we print the nodal equations first
                 eqs.append(kcl_expr)
-                eq_strings.append(f"Node {node} KCL: $$\\sum I = {sp.latex(kcl_expr)} = 0$$")
+                eq_strings.append(f"Node {node} KCL: ∑ I = {str(kcl_expr)} = 0")
                 
             steps.extend(eq_strings)
             
@@ -143,7 +143,7 @@ class AIAssistant:
             for p, q, v_sym, name in v_sources:
                 v_expr = V[p] - V[q] - v_sym
                 v_constraints.append(v_expr)
-                steps.append(f"Voltage Source Constraint ({name}): $${sp.latex(V[p])} - {sp.latex(V[q])} = {sp.latex(v_sym)}$$")
+                steps.append(f"Voltage Source Constraint ({name}): V{p} - V{q} = {name}")
             
             # Solve basic circuits symbolically
             # Let's perform a simple calculation replacing component names with their numeric values
@@ -177,23 +177,23 @@ class AIAssistant:
                 answer_text += "\n#### 2. Auxiliary Voltage Constraints\n"
                 for p, q, v_sym, name in v_sources:
                     val = sub_map[v_sym]
-                    answer_text += f"- **{name}**: $V_{p} - V_{q} = {val}\\text{ V}$ (since it is connected between Node {p} and Node {q})\n"
+                    answer_text += f"- **{name}**: V{p} - V{q} = {val} V (since it is connected between Node {p} and Node {q})\n"
             
             if "error" in sol:
                 answer_text += f"\n**Solver Notice:** {sol['error']}"
             else:
                 answer_text += "\n#### 3. Calculated Operating Voltages\n"
                 for node, volt in sol["voltages"].items():
-                    answer_text += f"- Voltage at **Node {node}**: $${volt:.3f}\\text{ V}$$\n"
+                    answer_text += f"- Voltage at **Node {node}**: {volt:.3f} V\n"
                     
                 answer_text += "\n#### 4. Calculated Branch Currents\n"
                 for comp_id, curr in sol["currents"].items():
-                    answer_text += f"- Current through **{comp_id}**: $${curr:.4f}\\text{ A}$$\n"
+                    answer_text += f"- Current through **{comp_id}**: {curr:.4f} A\n"
                     
                 answer_text += "\n#### 5. Component Power Analysis\n"
                 for comp_id, pwr in sol["power"].items():
                     pwr_type = "Absorbed" if pwr >= 0 else "Delivered"
-                    answer_text += f"- Power for **{comp_id}**: $${abs(pwr):.3f}\\text{ W}$$ ({pwr_type})\n"
+                    answer_text += f"- Power for **{comp_id}**: {abs(pwr):.3f} W ({pwr_type})\n"
             
             return {
                 "answer": answer_text,

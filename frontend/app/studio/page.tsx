@@ -233,14 +233,14 @@ export default function CircuitStudio() {
       setTimeout(() => {
         let answer = `### ElectraSim AI (Local Symbolic Solver)\n\n`;
         answer += `Kirchhoff's Current Law (KCL) states that the algebraic sum of currents at any node is zero:\n`;
-        answer += `$$\\sum I = 0$$\n\n`;
+        answer += `∑ I = 0\n\n`;
         answer += `#### Formulated Node Equations:\n`;
         
         components.forEach(c => {
           if (c.type === "resistor") {
-            answer += `- **Resistor ${c.id}**: current flows from Node ${c.nodes[0]} to Node ${c.nodes[1]} as: $$\\frac{V_{${c.nodes[0]}} - V_{${c.nodes[1]}}}{${c.value}\\Omega}$$\n`;
+            answer += `- **Resistor ${c.id}**: current flows from Node ${c.nodes[0]} to Node ${c.nodes[1]} as: (V${c.nodes[0]} - V${c.nodes[1]}) / ${c.value} Ω\n`;
           } else if (c.type === "dc_source") {
-            answer += `- **Voltage Source ${c.id}**: enforces constraint $V_{${c.nodes[0]}} - V_{${c.nodes[1]}} = {${c.value}}\\text{ V}$$\n`;
+            answer += `- **Voltage Source ${c.id}**: enforces constraint: V${c.nodes[0]} - V${c.nodes[1]} = ${c.value} V\n`;
           }
         });
 

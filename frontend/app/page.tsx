@@ -162,7 +162,7 @@ export default function LandingPage() {
               {/* Formula Panel */}
               <div className="flex-1 bg-slate-950 p-4 rounded-xl border border-slate-800">
                 <div className="text-center py-6 font-serif text-2xl text-blue-400">
-                  $$V = I \times R$$
+                  V = I &times; R
                 </div>
                 <div className="space-y-3 mt-4 text-xs font-mono text-slate-400">
                   <div className="flex justify-between">

@@ -67,13 +67,13 @@ export default function AIAssistantPage() {
         answer = (
           "### Transformer Losses Explanation\n\n" +
           "Transformers experience two primary types of power losses:\n\n" +
-          "1. **Core Loss (Iron Loss - $P_{fe}$):**\n" +
-          "   - **Hysteresis Loss:** Caused by magnetic domains alternating alignment. $P_h = k_h \\cdot f \\cdot B_m^{1.6}$.\n" +
-          "   - **Eddy Current Loss:** Caused by circulating currents in the laminations. $P_e = k_e \\cdot f^2 \\cdot t^2 \\cdot B_m^2$.\n" +
+          "1. **Core Loss (Iron Loss - P_fe):**\n" +
+          "   - **Hysteresis Loss:** Caused by magnetic domains alternating alignment. P_h = k_h * f * B_m^1.6.\n" +
+          "   - **Eddy Current Loss:** Caused by circulating currents in the laminations. P_e = k_e * f^2 * t^2 * B_m^2.\n" +
           "   - **Property:** Constant at all loads as it depends on voltage and frequency.\n\n" +
-          "2. **Copper Loss ($P_{cu}$):**\n" +
-          "   - Caused by winding resistances: $P_{cu} = I_1^2 R_1 + I_2^2 R_2 = I_{load}^2 R_{eq}$.\n" +
-          "   - **Property:** Variable, scales quadratically with load fraction ($x^2$)."
+          "2. **Copper Loss (P_cu):**\n" +
+          "   - Caused by winding resistances: P_cu = I_1^2 * R_1 + I_2^2 * R_2 = I_load^2 * R_eq.\n" +
+          "   - **Property:** Variable, scales quadratically with load fraction (x^2)."
         );
         steps = ["Parsed transformer loss query", "Retrieved core hysteresis variables", "Retrieved copper winding resistances"];
       } else if (query.includes("kcl") || query.includes("kvl")) {
@@ -83,18 +83,18 @@ export default function AIAssistantPage() {
           "1. Identify all active nodes (junctions) in the circuit netlist.\n" +
           "2. Assign a reference node (usually Node 0 as Ground potential = 0V).\n" +
           "3. Write a nodal equation for each unknown node voltage: sum of leaving currents = 0.\n" +
-          "   $$\\sum \\frac{V_{node} - V_{neighbor}}{R_{branch}} + I_{source} = 0$$\n" +
+          "   ∑ (V_node - V_neighbor) / R_branch + I_source = 0\n" +
           "4. Solve the resulting system of linear equations using standard matrices."
         );
         steps = ["Parsed matrix solver query", "Compiled KCL summation nodes", "Derived conductance matrices layout"];
       } else if (query.includes("slip")) {
         answer = (
           "### Induction Motor Slip Derivation\n\n" +
-          "Slip ($s$) represents the relative lag between the rotating stator magnetic field speed ($N_s$) and the rotor physical shaft speed ($N_r$):\n\n" +
-          "$$s = \\frac{N_s - N_r}{N_s}$$\n\n" +
+          "Slip (s) represents the relative lag between the rotating stator magnetic field speed (N_s) and the rotor physical shaft speed (N_r):\n\n" +
+          "s = (N_s - N_r) / N_s\n\n" +
           "Where:\n" +
-          "- Synchronous Speed: $N_s = \\frac{120 \\cdot f}{P}$\n" +
-          "- Actual speed $N_r$ is less than $N_s$ in motoring mode to allow torque generation by induction."
+          "- Synchronous Speed: N_s = 120 * f / P\n" +
+          "- Actual speed N_r is less than N_s in motoring mode to allow torque generation by induction."
         );
         steps = ["Parsed induction motor parameters", "Calculated synchronous speed Ns", "Subtracted rotor mechanical drag"];
       } else {
