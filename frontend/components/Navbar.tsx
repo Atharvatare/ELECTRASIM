@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sun, Moon, Cpu, Layout, BatteryCharging, Brain, BookOpen, FileText } from "lucide-react";
+import { Sun, Moon, Cpu, Layout, BatteryCharging, Brain, BookOpen, FileText, Sliders } from "lucide-react";
 import { useCircuitStore } from "../store/circuitStore";
 import { useEffect } from "react";
 
@@ -20,6 +20,7 @@ export default function Navbar() {
 
   const navItems = [
     { name: "Circuit Studio", href: "/studio", icon: Layout },
+    { name: "Control Systems", href: "/control-systems", icon: Sliders },
     { name: "Machines", href: "/machines", icon: Cpu },
     { name: "Power Electronics", href: "/power-electronics", icon: BatteryCharging },
     { name: "AI Assistant", href: "/ai-assistant", icon: Brain },

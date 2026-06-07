@@ -293,7 +293,12 @@ export default function CircuitStudio() {
               { type: "dc_source", label: "DC Source", value: 12, nodes: [1, 0] },
               { type: "ac_source", label: "AC Source", value: 10, nodes: [1, 0] },
               { type: "current_source", label: "Current Src", value: 2, nodes: [1, 0] },
-              { type: "diode", label: "Diode", value: 0.7, nodes: [1, 2] }
+              { type: "diode", label: "Diode", value: 0.7, nodes: [1, 2] },
+              { type: "opamp", label: "Op-Amp (741)", value: 100000, nodes: [1, 2] },
+              { type: "timer555", label: "555 Timer IC", value: 5, nodes: [1, 0] },
+              { type: "ldr", label: "LDR Sensor", value: 1000, nodes: [1, 0] },
+              { type: "thermistor", label: "Thermistor", value: 10000, nodes: [1, 0] },
+              { type: "lm35", label: "LM35 Temp", value: 0.25, nodes: [1, 0] }
             ].map((item) => (
               <button
                 key={item.type}
@@ -493,6 +498,43 @@ export default function CircuitStudio() {
                           {/* Triangle and bar */}
                           <polygon points={`${midX-5},${midY-6} ${midX-5},${midY+6} ${midX+5},${midY}`} fill="#8b5cf6" stroke="#8b5cf6" strokeWidth="1" />
                           <line x1={midX+5} y1={midY-6} x2={midX+5} y2={midY+6} stroke="#8b5cf6" strokeWidth="2" />
+                        </g>
+                      )}
+                      {comp.type === "opamp" && (
+                        <g>
+                          {/* Triangle Opamp symbol */}
+                          <polygon points={`${midX-8},${midY-10} ${midX-8},${midY+10} ${midX+10},${midY}`} fill="none" stroke="#3b82f6" strokeWidth="1.5" />
+                          <text x={midX-5} y={midY-2} fill="#3b82f6" fontSize="7" fontWeight="bold">-</text>
+                          <text x={midX-5} y={midY+6} fill="#3b82f6" fontSize="7" fontWeight="bold">+</text>
+                        </g>
+                      )}
+                      {comp.type === "timer555" && (
+                        <g>
+                          {/* IC block */}
+                          <rect x={midX-12} y={midY-12} width="24" height="24" rx="2" fill="none" stroke="#64748b" strokeWidth="2" />
+                          <text x={midX} y={midY+4} textAnchor="middle" fill="#64748b" fontSize="7" fontWeight="bold">555</text>
+                        </g>
+                      )}
+                      {comp.type === "ldr" && (
+                        <g>
+                          {/* Resistor + arrows */}
+                          <rect x={midX-10} y={midY-4} width="20" height="8" fill="none" stroke="#10b981" strokeWidth="1.5" />
+                          <line x1={midX-12} y1={midY-8} x2={midX-7} y2={midY-4} stroke="#10b981" strokeWidth="1" />
+                          <polygon points={`${midX-7},${midY-4} ${midX-10},${midY-4} ${midX-7},${midY-6}`} fill="#10b981" />
+                        </g>
+                      )}
+                      {comp.type === "thermistor" && (
+                        <g>
+                          {/* Resistor + diagonal line */}
+                          <rect x={midX-10} y={midY-4} width="20" height="8" fill="none" stroke="#f59e0b" strokeWidth="1.5" />
+                          <line x1={midX-12} y1={midY+8} x2={midX+12} y2={midY-8} stroke="#f59e0b" strokeWidth="1.5" />
+                        </g>
+                      )}
+                      {comp.type === "lm35" && (
+                        <g>
+                          {/* Sensor block */}
+                          <rect x={midX-10} y={midY-10} width="20" height="20" fill="none" stroke="#ef4444" strokeWidth="1.5" />
+                          <text x={midX} y={midY+3} textAnchor="middle" fill="#ef4444" fontSize="7" fontWeight="bold">LM35</text>
                         </g>
                       )}
                     </g>

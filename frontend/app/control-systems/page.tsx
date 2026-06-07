@@ -1,0 +1,396 @@
+"use client";
+
+import React, { useState } from "react";
+import { Sliders, RefreshCw, BarChart2, Zap, Settings, Activity } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+
+type AnalysisMode = "PID" | "Bode";
+type PlantType = "FirstOrder" | "SecondOrder";
+
+export default function ControlSystemsStudio() {
+  const [mode, setMode] = useState<AnalysisMode>("PID");
+  const [isLoading, setIsLoading] = useState(false);
+  const [results, setResults] = useState<any | null>(null);
+
+  // PID Parameters
+  const [kp, setKp] = useState("2.5");
+  const [ki, setKi] = useState("1.0");
+  const [kd, setKd] = useState("0.4");
+  const [setpoint, setSetpoint] = useState("1.0");
+  const [plant, setPlant] = useState<PlantType>("SecondOrder");
+  
+  // Plant parameters
+  const [tau, setTau] = useState("0.5"); // for first order: G = 1 / (tau*s + 1)
+  const [wn, setWn] = useState("4.0");   // for second order: G = wn^2 / (s^2 + 2*zeta*wn*s + wn^2)
+  const [zeta, setZeta] = useState("0.4");
+
+  // Bode Parameters
+  const [bodeK, setBodeK] = useState("10");
+  const [bodeT1, setBodeT1] = useState("0.2");
+  const [bodeT2, setBodeT2] = useState("0.05");
+
+  // Run PID Step Response simulation (using RK4)
+  const runPIDSimulation = () => {
+    setIsLoading(true);
+    
+    setTimeout(() => {
+      const Kp = parseFloat(kp);
+      const Ki = parseFloat(ki);
+      const Kd = parseFloat(kd);
+      const SP = parseFloat(setpoint);
+      
+      const t_stop = 6.0; // 6 seconds simulation
+      const dt = 0.01;    // step size 10ms
+      const steps = Math.round(t_stop / dt);
+      
+      const time = [];
+      const output = [];
+      const sp_arr = [];
+      
+      // State variables for plant
+      // First order: dy/dt = (u - y) / tau
+      let y = 0.0;
+      
+      // Second order state space: dx1/dt = x2, dx2/dt = -2*zeta*wn*x2 - wn^2*x1 + wn^2*u
+      let x1 = 0.0;
+      let x2 = 0.0;
+      
+      // PID variables
+      let integral = 0.0;
+      let prev_error = 0.0;
+      
+      const Tau = parseFloat(tau);
+      const Wn = parseFloat(wn);
+      const Zeta = parseFloat(zeta);
+      const Wn2 = Wn * Wn;
+      
+      // Numerical integration loop (Euler-Maruyama/Euler method for simplicity & speed)
+      for (let step = 0; step <= steps; step++) {
+        const t = step * dt;
+        time.push(parseFloat(t.toFixed(2)));
+        sp_arr.push(SP);
+        
+        // Error
+        const error = SP - y;
+        integral += error * dt;
+        const derivative = (error - prev_error) / dt;
+        prev_error = error;
+        
+        // Control signal u
+        let u = Kp * error + Ki * integral + Kd * derivative;
+        // Anti-windup saturation limit
+        u = Math.max(-10, Math.min(10, u));
+        
+        // Solve Plant differential equations
+        if (plant === "FirstOrder") {
+          const dy = (u - y) / Tau;
+          y += dy * dt;
+          output.push(parseFloat(y.toFixed(4)));
+        } else {
+          // Second order integration
+          const dx1 = x2;
+          const dx2 = -2.0 * Zeta * Wn * x2 - Wn2 * x1 + Wn2 * u;
+          x1 += dx1 * dt;
+          x2 += dx2 * dt;
+          y = x1;
+          output.push(parseFloat(y.toFixed(4)));
+        }
+      }
+      
+      // Calculate overshoot, settling time
+      const maxVal = Math.max(...output);
+      const overshoot = maxVal > SP ? ((maxVal - SP) / SP) * 100 : 0;
+      
+      // Settling time: within 2% band of setpoint
+      let settlingIdx = steps;
+      const band = 0.02 * SP;
+      for (let i = steps; i >= 0; i--) {
+        if (Math.abs(output[i] - SP) > band) {
+          settlingIdx = i;
+          break;
+        }
+      }
+      const settlingTime = settlingIdx * dt;
+      
+      // Rise time: 10% to 90%
+      let t10 = 0;
+      let t90 = 0;
+      for (let i = 0; i <= steps; i++) {
+        if (output[i] >= 0.1 * SP && t10 === 0) t10 = i * dt;
+        if (output[i] >= 0.9 * SP && t90 === 0) {
+          t90 = i * dt;
+          break;
+        }
+      }
+      
+      setResults({
+        metrics: {
+          overshoot: round(overshoot, 2),
+          settling_time: round(settlingTime, 2),
+          rise_time: round(t90 - t10, 2),
+          peak_value: round(maxVal, 3),
+          steady_state_error: round(Math.abs(SP - output[steps]), 4)
+        },
+        waveforms: time.map((t, idx) => ({
+          time: t,
+          "Setpoint": sp_arr[idx],
+          "Response Output": output[idx]
+        }))
+      });
+      setIsLoading(false);
+    }, 400);
+  };
+
+  // Run Bode Plot frequency sweep
+  const runBodePlot = () => {
+    setIsLoading(true);
+    setTimeout(() => {
+      const K = parseFloat(bodeK);
+      const T1 = parseFloat(bodeT1);
+      const T2 = parseFloat(bodeT2);
+      
+      // Frequency sweep from 0.1 rad/s to 1000 rad/s on log scale
+      const points = [];
+      const decades = 4; // 10^-1 to 10^3
+      const numPoints = 100;
+      
+      for (let i = 0; i < numPoints; i++) {
+        const logW = -1 + (decades * i) / (numPoints - 1);
+        const w = Math.pow(10, logW); // frequency in rad/s
+        
+        // Open loop G(s) = K / (s * (T1*s + 1) * (T2*s + 1))
+        // Magnitude = K / (w * sqrt(1 + (w*T1)^2) * sqrt(1 + (w*T2)^2))
+        const mag = K / (w * Math.sqrt(1 + w*w*T1*T1) * Math.sqrt(1 + w*w*T2*T2));
+        const magDb = 20 * Math.log10(mag);
+        
+        // Phase = -90 - atan(w*T1) - atan(w*T2)
+        const phaseRad = -Math.PI / 2 - Math.atan(w * T1) - Math.atan(w * T2);
+        let phaseDeg = (phaseRad * 180) / Math.PI;
+        
+        points.push({
+          frequency: w.toFixed(2),
+          "Magnitude (dB)": parseFloat(magDb.toFixed(2)),
+          "Phase (deg)": parseFloat(phaseDeg.toFixed(1))
+        });
+      }
+      
+      setResults({
+        waveforms: points
+      });
+      setIsLoading(false);
+    }, 400);
+  };
+
+  const round = (num: number, dec: number) => {
+    return parseFloat(num.toFixed(dec)) || 0;
+  };
+
+  return (
+    <div className="flex-1 flex flex-col md:flex-row bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-0">
+      
+      {/* 1. LEFT SIDEBAR: INPUT PARAMETERS */}
+      <div className="w-full md:w-80 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex flex-col space-y-4">
+        <div>
+          <h2 className="text-base font-bold text-slate-950 dark:text-white flex items-center space-x-1.5">
+            <Sliders className="h-5 w-5 text-indigo-500" />
+            <span>Control Systems</span>
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">Design controller feedback loops.</p>
+        </div>
+
+        {/* Tab Selector */}
+        <div className="flex border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+          {(["PID", "Bode"] as AnalysisMode[]).map((m) => (
+            <button
+              key={m}
+              onClick={() => {
+                setMode(m);
+                setResults(null);
+              }}
+              className={`flex-1 text-center py-2 text-xs font-semibold ${
+                mode === m
+                  ? "bg-indigo-600 text-white"
+                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+              }`}
+            >
+              {m === "PID" ? "PID Simulator" : "Bode Plotter"}
+            </button>
+          ))}
+        </div>
+
+        {/* Dynamic Parameter Forms */}
+        <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs">
+          {mode === "PID" ? (
+            <>
+              <div>
+                <label className="block font-bold text-slate-400 mb-1">Setpoint Target (SP)</label>
+                <input type="number" value={setpoint} onChange={e => setSetpoint(e.target.value)} step="0.1" className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono" />
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <div>
+                  <label className="block font-bold text-slate-400 mb-1">Kp (P)</label>
+                  <input type="number" value={kp} onChange={e => setKp(e.target.value)} step="0.1" className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono" />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-400 mb-1">Ki (I)</label>
+                  <input type="number" value={ki} onChange={e => setKi(e.target.value)} step="0.1" className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono" />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-400 mb-1">Kd (D)</label>
+                  <input type="number" value={kd} onChange={e => setKd(e.target.value)} step="0.1" className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono" />
+                </div>
+              </div>
+              <div>
+                <label className="block font-bold text-slate-400 mb-1">Plant Transfer Function</label>
+                <select value={plant} onChange={e => setPlant(e.target.value as PlantType)} className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                  <option value="FirstOrder">First Order: 1 / (τs + 1)</option>
+                  <option value="SecondOrder">Second Order: ωn² / (s² + 2ζωns + ωn²)</option>
+                </select>
+              </div>
+              {plant === "FirstOrder" ? (
+                <div>
+                  <label className="block font-bold text-slate-400 mb-1">Time Constant τ (seconds)</label>
+                  <input type="number" value={tau} onChange={e => setTau(e.target.value)} step="0.05" className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block font-bold text-slate-400 mb-1">Nat Freq ωn (rad/s)</label>
+                    <input type="number" value={wn} onChange={e => setWn(e.target.value)} step="0.5" className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono" />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-400 mb-1">Damping ζ</label>
+                    <input type="number" value={zeta} onChange={e => setZeta(e.target.value)} step="0.05" className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono" />
+                  </div>
+                </div>
+              )}
+              
+              <button
+                onClick={runPIDSimulation}
+                className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold flex items-center justify-center space-x-1.5 shadow-sm transition-all"
+              >
+                <Activity className="h-4 w-4" />
+                <span>Simulate Step Response</span>
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Bode Plot input configs */}
+              <div>
+                <label className="block font-bold text-slate-400 mb-1">System DC Gain K</label>
+                <input type="number" value={bodeK} onChange={e => setBodeK(e.target.value)} className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono" />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-400 mb-1">First Lag Pole T1 (s)</label>
+                <input type="number" value={bodeT1} onChange={e => setBodeT1(e.target.value)} step="0.05" className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono" />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-400 mb-1">Second Lag Pole T2 (s)</label>
+                <input type="number" value={bodeT2} onChange={e => setBodeT2(e.target.value)} step="0.01" className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono" />
+              </div>
+              <button
+                onClick={runBodePlot}
+                className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold flex items-center justify-center space-x-1.5 shadow-sm transition-all"
+              >
+                <BarChart2 className="h-4 w-4" />
+                <span>Plot Frequency Response</span>
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 2. MAIN PANEL: TRANSIENT CURVE / BODE GRAPH */}
+      <div className="flex-1 flex flex-col p-6 space-y-6 overflow-y-auto">
+        <div className="flex items-center justify-between border-b pb-4 border-slate-200 dark:border-slate-800">
+          <div>
+            <h1 className="text-xl font-bold text-slate-950 dark:text-white capitalize">
+              {mode === "PID" ? "PID Closed-Loop Transient Response" : "Open-Loop Bode Plot Sweeper"}
+            </h1>
+            <p className="text-xs text-slate-400 mt-1">Calculates feedback damping stability margins.</p>
+          </div>
+        </div>
+
+        {results ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
+            {/* Transient performance or specifications column */}
+            {mode === "PID" && (
+              <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b pb-2 flex items-center space-x-1">
+                  <Settings className="h-4 w-4" />
+                  <span>Transient Step Metrics</span>
+                </h3>
+                
+                <div className="space-y-3 font-mono text-xs">
+                  <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
+                    <span className="text-[10px] text-slate-400 block font-bold">Max Overshoot (Mp)</span>
+                    <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">{results.metrics.overshoot} %</span>
+                  </div>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
+                    <span className="text-[10px] text-slate-400 block font-bold">Settling Time (Ts, 2% band)</span>
+                    <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">{results.metrics.settling_time} s</span>
+                  </div>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
+                    <span className="text-[10px] text-slate-400 block font-bold">Rise Time (Tr, 10%-90%)</span>
+                    <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">{results.metrics.rise_time} s</span>
+                  </div>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
+                    <span className="text-[10px] text-slate-400 block font-bold">Steady-State Error</span>
+                    <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">{results.metrics.steady_state_error}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Graphs Column */}
+            <div className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 ${
+              mode === "PID" ? "lg:col-span-2" : "lg:col-span-3"
+            } h-96 flex flex-col`}>
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b pb-2 mb-3 flex items-center space-x-1.5">
+                <BarChart2 className="h-4.5 w-4.5" />
+                <span>
+                  {mode === "PID" ? "Step Response Plot" : "Logarithmic Frequency Response Magnitude (dB)"}
+                </span>
+              </h3>
+
+              <div className="flex-1 min-h-0">
+                <ResponsiveContainer width="100%" height="95%">
+                  {mode === "PID" ? (
+                    <LineChart data={results.waveforms} margin={{ top: 5, right: 10, bottom: 5, left: -20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="time" tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                      <YAxis tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                      <Tooltip contentStyle={{ fontSize: 11, background: "#0f172a", color: "#fff" }} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Line type="monotone" dataKey="Setpoint" stroke="#ef4444" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
+                      <Line type="monotone" dataKey="Response Output" stroke="#4f46e5" strokeWidth={2.5} dot={false} />
+                    </LineChart>
+                  ) : (
+                    <LineChart data={results.waveforms} margin={{ top: 5, right: 10, bottom: 5, left: -20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="frequency" tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                      <YAxis tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                      <Tooltip contentStyle={{ fontSize: 11, background: "#0f172a", color: "#fff" }} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Line type="monotone" dataKey="Magnitude (dB)" stroke="#4f46e5" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="Phase (deg)" stroke="#10b981" strokeWidth={1.5} dot={false} />
+                    </LineChart>
+                  )}
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center p-10 text-center">
+            <Sliders className="h-10 w-10 text-slate-350 dark:text-slate-700 animate-pulse" />
+            <h4 className="mt-4 font-bold text-slate-600 dark:text-slate-400">Simulation not evaluated</h4>
+            <p className="text-xs text-slate-400 max-w-sm mt-1">
+              Select an analysis model on the left sidebar, adjust gains or pole constants, and click simulate to plot dynamic responses.
+            </p>
+          </div>
+        )}
+      </div>
+
+    </div>
+  );
+}
