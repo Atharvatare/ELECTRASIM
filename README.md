@@ -1,7 +1,7 @@
 # ElectraSim AI
 
 ### AI-Powered Electrical Engineering Simulation Platform
-ElectraSim AI is a browser-based electrical engineering simulation environment that merges the capabilities of spice simulators (Falstad, LTSpice), machine modeling frameworks (MATLAB Simulink), and AI-guided tutors into a cohesive modern SaaS platform. Founded by **Atharva Ravindra Tare**.
+ElectraSim AI is a browser-based electrical engineering simulation environment that merges the capabilities of spice simulators (Falstad, LTSpice), machine modeling frameworks (MATLAB Simulink), industrial automation systems, and AI-guided tutors into a cohesive modern SaaS platform. Founded and spearheaded by **Atharva Ravindra Tare**.
 
 ---
 
@@ -10,9 +10,15 @@ ElectraSim AI is a browser-based electrical engineering simulation environment t
 - **Circuit Design Studio**: Drag-and-drop circuit editor with passive components, AC/DC/current sources, diodes, switches, and meters. Solved using Modified Nodal Analysis (MNA).
 - **Machine Studio**: Analysis of DC Motors, Induction Motors, Synchronous Motors, and Transformers using physical equivalent circuits.
 - **Power Electronics Workbench**: Modeling of controlled/uncontrolled rectifiers, square-wave/SPWM single-phase inverters, and Buck/Boost chopper converters.
+- **Power Systems Lab**: Transmission lines ABCD parameters calculators (Short, Medium, Long models), symmetrical/unsymmetrical fault current calculations, and Gauss-Seidel 3-bus load flow solvers.
+- **Programmable PLC & SCADA Simulator**: Fully interactive Ladder Logic Builder with series Normally Open/Closed contacts, parallel latch branches, output coils, and On-Delay TON Timers, dynamically driving a real-time SVG SCADA water tank level simulation.
+- **Analog & Digital Workbench**: Solves RC components for active Butterworth low-pass/high-pass filters, simulates R-2R DAC ladder networks, and simulates 3-bit Flash ADCs.
+- **Motor Drive Studio**: Continuous ODE PID speed control simulation of a DC shunt motor under step torque disturbances.
+- **Fourier Signal Lab**: Time/Frequency domain analysis showing harmonic synthesis.
 - **AI Engineering Assistant**: Step-by-step mathematical nodal derivation, formula explanations, and fault detection (e.g. open circuit checks).
 - **Oscilloscope Waveforms**: Time-series charts representing transient voltage and current potentials using Recharts.
 - **Engineering PDF Reports**: Formatted ReportLab exports summarizing simulation outputs, math, and AI reviews.
+- **Secure Authentication**: Next-gen glassmorphic Login and Registration pages linked directly to FastAPI JWT database authentication endpoints (`/auth/register`, `/auth/login`, `/auth/me`).
 
 ---
 
@@ -21,13 +27,13 @@ ElectraSim AI is a browser-based electrical engineering simulation environment t
 ### Frontend
 - **Framework**: Next.js 16 (App Router), React 19, TypeScript
 - **Styling**: Tailwind CSS
-- **State Management**: Zustand
+- **State Management**: Zustand (Global stores for circuits, simulator configurations, and sessions)
 - **Visualization**: Recharts, Custom SVG renderers
 
 ### Backend
 - **Framework**: FastAPI
 - **Math/Simulation**: NumPy, SciPy, SymPy, cmath
-- **Database ORM**: SQLAlchemy, PostgreSQL
+- **Database ORM**: SQLAlchemy, SQLite (Development), PostgreSQL (Production)
 - **Security**: python-jose (JWT), passlib[bcrypt]
 - **Reporting**: ReportLab
 
@@ -55,11 +61,13 @@ ELECTRASIM/
 │   │   │   └── assistant.py   # AI Assistant & symbolic solver
 │   │   ├── machines/          # DC, IM, SM, and Transformer models
 │   │   ├── power_electronics/ # Rectifiers, inverters, and choppers
+│   │   ├── power_systems/     # Transmission lines parameters and solvers
 │   │   ├── reports/
 │   │   │   └── pdf_generator.py # ReportLab PDF compiler
 │   │   └── routes/            # API routing submodules
 │   ├── tests/
-│   │   └── test_simulation.py # pytest verification cases
+│   │   ├── test_simulation.py # pytest verification cases
+│   │   └── test_power_systems.py
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── frontend/
@@ -67,15 +75,23 @@ ELECTRASIM/
 │   │   ├── studio/            # Circuit editor workbench
 │   │   ├── machines/          # Machines analyzer workbench
 │   │   ├── power-electronics/ # Power electronics workbench
+│   │   ├── power-systems/     # Power systems analyzer
+│   │   ├── plc-scada/         # Programmable PLC editor and SCADA animation
+│   │   ├── analog-digital/    # Filters, DAC, and ADC designer
+│   │   ├── motor-drive/       # Closed-loop DC PID controller
+│   │   ├── fourier-lab/       # Fourier signal analyzer
 │   │   ├── ai-assistant/      # AI copilot chat interface
 │   │   ├── library/           # Formula Reference index
 │   │   ├── reports/           # PDF compile dashboard
+│   │   ├── login/             # User sign in card
+│   │   ├── register/          # User sign up card
 │   │   ├── layout.tsx         # Next.js root layout wrapper
 │   │   └── page.tsx           # Premium Landing & About page
 │   ├── components/
 │   │   └── Navbar.tsx         # Global navigation & theme toggle
 │   ├── store/
-│   │   └── circuitStore.ts    # Zustand global state store
+│   │   ├── circuitStore.ts    # Zustand global state store
+│   │   └── authStore.ts       # Zustand user authentication store
 │   ├── Dockerfile
 │   └── package.json
 └── docker-compose.yml
