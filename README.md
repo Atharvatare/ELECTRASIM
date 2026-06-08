@@ -1,7 +1,9 @@
 # ElectraSim AI
 
 ### AI-Powered Electrical Engineering Simulation Platform
-ElectraSim AI is a browser-based electrical engineering simulation environment that merges the capabilities of spice simulators (Falstad, LTSpice), machine modeling frameworks (MATLAB Simulink), industrial automation systems, and AI-guided tutors into a cohesive modern SaaS platform. Founded and spearheaded by **Atharva Ravindra Tare**.
+ElectraSim AI is a browser-based electrical engineering simulation environment that merges the capabilities of spice simulators (Falstad, LTSpice), machine modeling frameworks (MATLAB Simulink), industrial automation systems, and AI-guided tutors into a cohesive modern SaaS platform. 
+
+Founded and spearheaded by **Atharva Ravindra Tare**.
 
 ---
 
@@ -12,7 +14,7 @@ ElectraSim AI is a browser-based electrical engineering simulation environment t
 - **Power Electronics Workbench**: Modeling of controlled/uncontrolled rectifiers, square-wave/SPWM single-phase inverters, and Buck/Boost chopper converters.
 - **Power Systems Lab**: Transmission lines ABCD parameters calculators (Short, Medium, Long models), symmetrical/unsymmetrical fault current calculations, and Gauss-Seidel 3-bus load flow solvers.
 - **Programmable PLC & SCADA Simulator**: Fully interactive Ladder Logic Builder with series Normally Open/Closed contacts, parallel latch branches, output coils, and On-Delay TON Timers, dynamically driving a real-time SVG SCADA water tank level simulation.
-- **Analog & Digital Workbench**: Solves RC components for active Butterworth low-pass/high-pass filters, simulates R-2R DAC ladder networks, and simulates 3-bit Flash ADCs.
+- **Analog & Digital Workbench**: Solves RC components for active Sallen-Key Butterworth low-pass/high-pass filters, simulates R-2R DAC ladder networks, and simulates 3-bit Flash ADCs.
 - **Motor Drive Studio**: Continuous ODE PID speed control simulation of a DC shunt motor under step torque disturbances.
 - **Fourier Signal Lab**: Time/Frequency domain analysis showing harmonic synthesis.
 - **AI Engineering Assistant**: Step-by-step mathematical nodal derivation, formula explanations, and fault detection (e.g. open circuit checks).
@@ -99,6 +101,40 @@ ELECTRASIM/
 
 ---
 
+## Core API Endpoints Reference
+
+### 1. User Authentication
+*   `POST /api/v1/auth/register` - Create user profile and generate token session.
+*   `POST /api/v1/auth/login` - Verify user credentials and return bearer JWT.
+*   `GET /api/v1/auth/me` - Fetch verified profile details of the active session (Requires Bearer token header).
+
+### 2. Simulation & Calculation Engines
+*   `POST /api/v1/circuits/solve` - Run MNA SPICE solver for DC/Transient analysis.
+*   `POST /api/v1/power-systems/transmission` - Solve Short, Medium, Long line ABCD parameters.
+*   `POST /api/v1/power-systems/fault` - Compute symmetrical/unsymmetrical fault currents.
+*   `POST /api/v1/power-systems/load-flow` - Run Gauss-Seidel load flow equations on a 3-bus grid.
+*   `POST /api/v1/reports/generate` - Compile engineering PDF sheets using ReportLab.
+
+---
+
+## Programmable PLC Tag Address Maps
+
+When building custom programs in the **Ladder Logic diagram workspace**, the execution cycle maps contacts and coil variables to these internal registers:
+
+| Address Tag Name | Type | Description |
+| --- | --- | --- |
+| `Start_PB` | Input (Momentary) | Closes (TRUE) when user clicks and holds Start button. |
+| `Stop_PB` | Input (Fail-safe) | Opens (FALSE) when user clicks Stop button. Conducts (TRUE) otherwise. |
+| `High_Level_Sensor` | Input (Limit) | Automatically closes (TRUE) when water level reaches $\ge 90\%$. |
+| `Low_Level_Sensor` | Input (Limit) | Automatically closes (TRUE) when water level is $> 15\%$. |
+| `Fill_Valve` | Output (Actuator) | Solenoid filling valve. Controls inflow rate. |
+| `Drain_Valve` | Output (Actuator) | Solenoid drainage valve. Controls outflow rate. |
+| `Alarm_Light` | Output (Indicator) | Excites warning systems on overflow levels. |
+| `T1_DN` | Timer Status | Done bit. Closes (TRUE) when TON timer `T1` reaches its preset time. |
+| `T2_DN` | Timer Status | Done bit. Closes (TRUE) when TON timer `T2` reaches its preset time. |
+
+---
+
 ## Local Development Setup
 
 ### Prerequisite Dependencies
@@ -132,13 +168,20 @@ ELECTRASIM/
    ```
    The application dashboard will be active at `http://localhost:3000`.
 
+### 3. Running Backend Verification Tests
+Verify all calculation routers and models pass:
+```bash
+cd backend
+venv\Scripts\python -m pytest
+```
+
 ---
 
 ## Environment Variables Configuration
 
 | Variable Name | Purpose | Required/Optional | Example / Default Value |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | PostgreSQL connection string | Optional | `sqlite:///./electrasim.db` |
+| `DATABASE_URL` | SQLAlchemy connection string | Optional | `sqlite:///./electrasim.db` |
 | `SECRET_KEY` | JWT signature token key | Required in Prod | `super_secret_production_key_4758392019` |
 | `OPENAI_API_KEY` | OpenAI API key for AI Copilot | Optional (fallback to SymPy) | `sk-proj-...` |
 
