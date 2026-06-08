@@ -1,0 +1,27 @@
+# Databases
+*.db
+*.sqlite
+backend/electrasim.db
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+backend/app/**/__pycache__/
+backend/tests/__pycache__/
+
+# Node / frontend builds
+node_modules/
+.next/
+frontend/node_modules/
+frontend/.next/
+out/
+build/
+
+# IDEs / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

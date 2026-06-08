@@ -105,31 +105,58 @@ export default function PowerElectronicsStudio() {
         const vm = parseFloat(recVrms) * Math.sqrt(2);
         const f = parseFloat(recFreq);
         const r = parseFloat(recR);
-        const alpha_rad = recControlled ? (parseFloat(recAlpha) * Math.PI) / 180 : 0;
+        const alpha_rad = (recControlled || recTopology === "ac_voltage_controller") ? (parseFloat(recAlpha) * Math.PI) / 180 : 0;
         
-        // Vdc and Vrms math
         let vdc = 0;
         let vrms = 0;
-        if (recTopology === "half_wave_rectifier") {
-          vdc = (vm / (2 * Math.PI)) * (1 + Math.cos(alpha_rad));
-          vrms = vm * Math.sqrt((1 / (4 * Math.PI)) * (Math.PI - alpha_rad + 0.5 * Math.sin(2 * alpha_rad)));
-        } else {
-          vdc = (vm / Math.PI) * (1 + Math.cos(alpha_rad));
-          vrms = vm * Math.sqrt((1 / (2 * Math.PI)) * (Math.PI - alpha_rad + 0.5 * Math.sin(2 * alpha_rad)));
-        }
+        let v_in: number[] = [];
+        let v_in_b: number[] = [];
+        let v_in_c: number[] = [];
+        let v_out: number[] = [];
 
-        const v_in = time.map(t => vm * Math.sin(2 * Math.PI * f * t));
-        const v_out = time.map((t) => {
-          const theta = (2 * Math.PI * f * t) % (2 * Math.PI);
-          const vin = vm * Math.sin(2 * Math.PI * f * t);
+        if (recTopology === "three_phase_bridge_rectifier") {
+          const vm_ll = vm * Math.sqrt(3);
+          v_in = time.map(t => vm * Math.sin(2 * Math.PI * f * t));
+          v_in_b = time.map(t => vm * Math.sin(2 * Math.PI * f * t - (2 * Math.PI) / 3));
+          v_in_c = time.map(t => vm * Math.sin(2 * Math.PI * f * t + (2 * Math.PI) / 3));
+          v_out = time.map((t) => {
+            const theta = (2 * Math.PI * f * t) % (2 * Math.PI);
+            const phi = ((theta - alpha_rad - Math.PI / 6) % (Math.PI / 3)) - Math.PI / 6;
+            let vout = vm_ll * Math.cos(phi);
+            return vout < 0 ? 0 : vout;
+          });
+          const sum_vout = v_out.reduce((sum, val) => sum + val, 0);
+          vdc = sum_vout / v_out.length;
+          const sum_sq_vout = v_out.reduce((sum, val) => sum + val * val, 0);
+          vrms = Math.sqrt(sum_sq_vout / v_out.length);
+        } else {
           if (recTopology === "half_wave_rectifier") {
-            return alpha_rad <= theta && theta <= Math.PI ? vin : 0;
+            vdc = (vm / (2 * Math.PI)) * (1 + Math.cos(alpha_rad));
+            vrms = vm * Math.sqrt((1 / (4 * Math.PI)) * (Math.PI - alpha_rad + 0.5 * Math.sin(2 * alpha_rad)));
+          } else if (recTopology === "ac_voltage_controller") {
+            vdc = 0.0;
+            vrms = parseFloat(recVrms) * Math.sqrt(1 - (alpha_rad / Math.PI) + Math.sin(2 * alpha_rad) / (2 * Math.PI));
           } else {
-            if (alpha_rad <= theta && theta <= Math.PI) return vin;
-            if ((Math.PI + alpha_rad) <= theta && theta <= (2 * Math.PI)) return -vin;
-            return 0;
+            vdc = (vm / Math.PI) * (1 + Math.cos(alpha_rad));
+            vrms = vm * Math.sqrt((1 / (2 * Math.PI)) * (Math.PI - alpha_rad + 0.5 * Math.sin(2 * alpha_rad)));
           }
-        });
+          v_in = time.map(t => vm * Math.sin(2 * Math.PI * f * t));
+          v_out = time.map((t) => {
+            const theta = (2 * Math.PI * f * t) % (2 * Math.PI);
+            const vin = vm * Math.sin(2 * Math.PI * f * t);
+            if (recTopology === "half_wave_rectifier") {
+              return alpha_rad <= theta && theta <= Math.PI ? vin : 0;
+            } else if (recTopology === "ac_voltage_controller") {
+              if (alpha_rad <= theta && theta <= Math.PI) return vin;
+              if ((Math.PI + alpha_rad) <= theta && theta <= (2 * Math.PI)) return vin;
+              return 0;
+            } else {
+              if (alpha_rad <= theta && theta <= Math.PI) return vin;
+              if ((Math.PI + alpha_rad) <= theta && theta <= (2 * Math.PI)) return -vin;
+              return 0;
+            }
+          });
+        }
 
         setResults({
           outputs: {
@@ -137,12 +164,14 @@ export default function PowerElectronicsStudio() {
             rms_voltage: vrms,
             average_current: vdc / r,
             rms_current: vrms / r,
-            ripple_factor: Math.sqrt(Math.max(0, Math.pow(vrms/vdc, 2) - 1)),
-            efficiency: (vdc*vdc) / (vrms*vrms) * 100
+            ripple_factor: vdc > 0 ? Math.sqrt(Math.max(0, Math.pow(vrms/vdc, 2) - 1)) : 0.0,
+            efficiency: vrms > 0 ? (vdc*vdc) / (vrms*vrms) * 100 : 0.0
           },
           waveforms: {
             time,
             input_voltage: v_in,
+            input_voltage_b: v_in_b.length > 0 ? v_in_b : undefined,
+            input_voltage_c: v_in_c.length > 0 ? v_in_c : undefined,
             output_voltage: v_out
           }
         });
@@ -194,8 +223,16 @@ export default function PowerElectronicsStudio() {
           vout = d * vin;
           delta_i = (vin * d * (1 - d)) / (L * f);
           delta_v = (vin * d * (1 - d)) / (8 * L * C * f * f);
-        } else {
+        } else if (chTopology === "boost") {
           vout = vin / (1 - d);
+          delta_i = (vin * d) / (L * f);
+          delta_v = (vout * d) / (r * C * f);
+        } else if (chTopology === "cuk") {
+          vout = - (vin * d) / (1 - d);
+          delta_i = (vin * d) / (L * f);
+          delta_v = (Math.abs(vout) * d) / (r * C * f);
+        } else { // buck_boost and sepic
+          vout = (vin * d) / (1 - d);
           delta_i = (vin * d) / (L * f);
           delta_v = (vout * d) / (r * C * f);
         }
@@ -204,12 +241,20 @@ export default function PowerElectronicsStudio() {
         const v_out = time.map((t) => {
           const t_cycle = (t * f) % 1;
           const ripple = t_cycle < d ? (delta_v * (t_cycle/d - 0.5)) : (delta_v * ((1 - t_cycle)/(1 - d) - 0.5));
-          return vout + ripple;
+          return vout + (chTopology === "cuk" ? -ripple : ripple);
         });
 
         const v_sw = time.map((t) => {
           const t_cycle = (t * f) % 1;
-          return t_cycle < d ? vin : 0.0;
+          if (chTopology === "buck") {
+            return t_cycle < d ? vin : 0.0;
+          } else if (chTopology === "boost") {
+            return t_cycle < d ? 0.0 : vout;
+          } else if (chTopology === "cuk") {
+            return t_cycle < d ? vin : vout;
+          } else {
+            return t_cycle < d ? 0.0 : (vin + vout);
+          }
         });
 
         setResults({
@@ -217,7 +262,7 @@ export default function PowerElectronicsStudio() {
             average_output_voltage: vout,
             output_ripple_voltage: delta_v,
             inductor_ripple_current: delta_i,
-            average_output_current: vout / r
+            average_output_current: Math.abs(vout) / r
           },
           waveforms: {
             time,
@@ -239,7 +284,13 @@ export default function PowerElectronicsStudio() {
     for (let i = 0; i < time.length; i++) {
       const entry: any = { time: time[i] };
       if (converter === "Rectifier") {
-        entry["Input Voltage (V)"] = parseFloat(results.waveforms.input_voltage[i]?.toFixed(2) || "0");
+        if (results.waveforms.input_voltage_b) {
+          entry["Input Phase A (V)"] = parseFloat(results.waveforms.input_voltage[i]?.toFixed(2) || "0");
+          entry["Input Phase B (V)"] = parseFloat(results.waveforms.input_voltage_b[i]?.toFixed(2) || "0");
+          entry["Input Phase C (V)"] = parseFloat(results.waveforms.input_voltage_c[i]?.toFixed(2) || "0");
+        } else {
+          entry["Input Voltage (V)"] = parseFloat(results.waveforms.input_voltage[i]?.toFixed(2) || "0");
+        }
         entry["Output Voltage (V)"] = parseFloat(results.waveforms.output_voltage[i]?.toFixed(2) || "0");
       } else if (converter === "Inverter") {
         entry["Output Voltage (V)"] = parseFloat(results.waveforms.output_voltage[i]?.toFixed(2) || "0");
@@ -296,13 +347,15 @@ export default function PowerElectronicsStudio() {
                   <option value="half_wave_rectifier">Half Wave Rectifier</option>
                   <option value="full_wave_rectifier">Full Wave (Center-Tapped)</option>
                   <option value="bridge_rectifier">Bridge Rectifier</option>
+                  <option value="three_phase_bridge_rectifier">Three-Phase Bridge Rectifier</option>
+                  <option value="ac_voltage_controller">AC Voltage Controller (Phase Control)</option>
                 </select>
               </div>
               <div className="flex items-center space-x-2 py-1">
                 <input type="checkbox" id="controlled" checked={recControlled} onChange={e => setRecControlled(e.target.checked)} className="rounded border-slate-350" />
                 <label htmlFor="controlled" className="font-bold text-slate-400">Controlled Rectifier (SCR)</label>
               </div>
-              {recControlled && (
+              {(recControlled || recTopology === "ac_voltage_controller") && (
                 <div>
                   <label className="block font-bold text-slate-400 mb-1">Firing Angle alpha (deg)</label>
                   <input type="number" value={recAlpha} onChange={e => setRecAlpha(e.target.value)} className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono" />
@@ -366,6 +419,9 @@ export default function PowerElectronicsStudio() {
                 <select value={chTopology} onChange={e => setChTopology(e.target.value)} className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
                   <option value="buck">Buck (Step-down)</option>
                   <option value="boost">Boost (Step-up)</option>
+                  <option value="buck_boost">Buck-Boost (Inverting)</option>
+                  <option value="cuk">Cuk Converter</option>
+                  <option value="sepic">SEPIC Converter</option>
                 </select>
               </div>
               <div>
@@ -463,7 +519,15 @@ export default function PowerElectronicsStudio() {
                     <Legend wrapperStyle={{ fontSize: 10 }} />
                     {converter === "Rectifier" && (
                       <>
-                        <Line type="monotone" dataKey="Input Voltage (V)" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
+                        {results?.waveforms?.input_voltage_b ? (
+                          <>
+                            <Line type="monotone" dataKey="Input Phase A (V)" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
+                            <Line type="monotone" dataKey="Input Phase B (V)" stroke="#eab308" strokeWidth={1.5} dot={false} />
+                            <Line type="monotone" dataKey="Input Phase C (V)" stroke="#ec4899" strokeWidth={1.5} dot={false} />
+                          </>
+                        ) : (
+                          <Line type="monotone" dataKey="Input Voltage (V)" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
+                        )}
                         <Line type="monotone" dataKey="Output Voltage (V)" stroke="#ef4444" strokeWidth={2.5} dot={false} />
                       </>
                     )}

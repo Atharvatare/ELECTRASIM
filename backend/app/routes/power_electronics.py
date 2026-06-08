@@ -13,11 +13,17 @@ def simulate_power_converter(req: PowerElectronicsSimRequest, current_user: User
     inputs = req.inputs
     
     try:
-        if converter in ("half_wave_rectifier", "full_wave_rectifier", "bridge_rectifier"):
-            topology = "half_wave" if converter == "half_wave_rectifier" else ("full_wave" if converter == "full_wave_rectifier" else "bridge")
+        if converter in ("half_wave_rectifier", "full_wave_rectifier", "bridge_rectifier", "three_phase_bridge_rectifier", "ac_voltage_controller"):
+            topology = "half_wave" if converter == "half_wave_rectifier" else (
+                "full_wave" if converter == "full_wave_rectifier" else (
+                    "three_phase_bridge" if converter == "three_phase_bridge_rectifier" else (
+                        "ac_voltage_controller" if converter == "ac_voltage_controller" else "bridge"
+                    )
+                )
+            )
             res = RectifierSimulator.simulate(
                 topology=topology,
-                is_controlled=inputs.get("is_controlled", False),
+                is_controlled=inputs.get("is_controlled", False) or topology == "ac_voltage_controller",
                 voltage_rms=float(inputs["voltage_rms"]),
                 frequency=float(inputs["frequency"]),
                 load_r=float(inputs["load_r"]),
@@ -34,9 +40,9 @@ def simulate_power_converter(req: PowerElectronicsSimRequest, current_user: User
                 carrier_frequency=float(inputs.get("carrier_frequency", 1000.0))
             )
             
-        elif converter in ("buck", "boost", "buck_boost", "chopper"):
+        elif converter in ("buck", "boost", "buck_boost", "cuk", "sepic", "chopper"):
             topology = inputs.get("topology", "buck")
-            if converter in ("buck", "boost", "buck_boost"):
+            if converter in ("buck", "boost", "buck_boost", "cuk", "sepic"):
                 topology = converter
                 
             res = ChopperSimulator.simulate(

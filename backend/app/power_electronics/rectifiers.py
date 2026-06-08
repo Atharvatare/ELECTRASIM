@@ -27,6 +27,14 @@ class RectifierSimulator:
             vdc = (vm / (2.0 * math.pi)) * (1.0 + math.cos(alpha))
             # Vrms = Vm * sqrt((1 / 4pi) * (pi - alpha + sin(2*alpha)/2))
             vrms = vm * math.sqrt((1.0 / (4.0 * math.pi)) * (math.pi - alpha + 0.5 * math.sin(2.0 * alpha)))
+        elif topology == "ac_voltage_controller":
+            # AC Phase controlled dimmer
+            vdc = 0.0
+            vrms = voltage_rms * math.sqrt(1.0 - (alpha / math.pi) + math.sin(2.0 * alpha) / (2.0 * math.pi))
+        elif topology == "three_phase_bridge":
+            # Will be computed numerically from waveforms below
+            vdc = 0.0
+            vrms = 0.0
         else: # full_wave or bridge
             # Vdc = (Vm / pi) * (1 + cos(alpha))
             vdc = (vm / math.pi) * (1.0 + math.cos(alpha))
@@ -38,7 +46,7 @@ class RectifierSimulator:
         
         form_factor = vrms / vdc if vdc > 0 else 0.0
         # Ripple Factor = sqrt(FF^2 - 1)
-        ripple_factor = math.sqrt(max(0.0, form_factor**2 - 1.0))
+        ripple_factor = math.sqrt(max(0.0, form_factor**2 - 1.0)) if vdc > 0 else 0.0
         
         # Rectification Efficiency = P_dc / P_ac = (Vdc * Idc) / (Vrms * Irms) = Vdc^2 / Vrms^2
         efficiency = (vdc**2 / vrms**2) * 100.0 if vrms > 0 else 0.0
@@ -50,19 +58,41 @@ class RectifierSimulator:
         omega = 2.0 * math.pi * frequency
         
         v_input = []
+        v_input_b = []
+        v_input_c = []
         v_output = []
         i_output = []
+        
+        vm_ll = vm * math.sqrt(3.0)
         
         for t in t_arr:
             theta = (omega * t) % (2.0 * math.pi)
             vin = vm * math.sin(omega * t)
+            vin_b = vm * math.sin(omega * t - 2.0 * math.pi / 3.0)
+            vin_c = vm * math.sin(omega * t + 2.0 * math.pi / 3.0)
+            
             v_input.append(float(vin))
+            v_input_b.append(float(vin_b))
+            v_input_c.append(float(vin_c))
             
             vout = 0.0
             if topology == "half_wave":
                 # Conducts only during positive half-cycle, and after firing angle
                 if alpha <= theta <= math.pi:
                     vout = vin
+            elif topology == "ac_voltage_controller":
+                # Phase controlled AC output: conducts in both halves after alpha delay
+                if alpha <= theta <= math.pi:
+                    vout = vin
+                elif (math.pi + alpha) <= theta <= (2.0 * math.pi):
+                    vout = vin
+            elif topology == "three_phase_bridge":
+                # Three-phase 6-pulse bridge (controlled thyristor / SCR)
+                # Commutation occurs naturally at pi/6 + k * pi/3. SCR delays this by alpha.
+                phi = ((theta - alpha - math.pi / 6.0) % (math.pi / 3.0)) - math.pi / 6.0
+                vout = vm_ll * math.cos(phi)
+                # For resistive loads, clip to zero if output line voltage falls negative
+                vout = max(0.0, vout)
             else: # full_wave or bridge
                 # Conducts in first half-cycle after alpha, or second half-cycle after (pi + alpha)
                 if alpha <= theta <= math.pi:
@@ -72,6 +102,16 @@ class RectifierSimulator:
             
             v_output.append(float(vout))
             i_output.append(float(vout / load_r))
+            
+        # Complete numerical integration override for 3-phase bridge
+        if topology == "three_phase_bridge":
+            vdc = float(np.mean(v_output))
+            vrms = float(math.sqrt(np.mean(np.square(v_output))))
+            idc = vdc / load_r
+            irms = vrms / load_r
+            form_factor = vrms / vdc if vdc > 0 else 0.0
+            ripple_factor = math.sqrt(max(0.0, form_factor**2 - 1.0)) if vdc > 0 else 0.0
+            efficiency = (vdc**2 / vrms**2) * 100.0 if vrms > 0 else 0.0
             
         return {
             "average_voltage": round(vdc, 2),
@@ -84,7 +124,9 @@ class RectifierSimulator:
             "waveforms": {
                 "time": t_arr.tolist(),
                 "input_voltage": v_input,
+                "input_voltage_b": v_input_b,
+                "input_voltage_c": v_input_c,
                 "output_voltage": v_output,
                 "output_current": i_output
+              }
             }
-        }

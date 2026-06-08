@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 export interface CircuitComponent {
   id: string;
-  type: "resistor" | "capacitor" | "inductor" | "dc_source" | "ac_source" | "current_source" | "diode" | "opamp" | "timer555" | "ldr" | "thermistor" | "lm35";
+  type: "resistor" | "capacitor" | "inductor" | "dc_source" | "ac_source" | "current_source" | "diode" | "opamp" | "timer555" | "ldr" | "thermistor" | "lm35" | "bjt" | "mosfet" | "relay" | "lm7805" | "hall_sensor" | "and_gate" | "or_gate" | "not_gate";
   value: number;
   nodes: [number, number]; // [positive_node, negative_node]
   frequency?: number;       // only for ac_source
@@ -52,8 +52,15 @@ export const useCircuitStore = create<CircuitState>((set) => ({
                    comp.type === "diode" ? "D" :
                    comp.type === "opamp" ? "U" :
                    comp.type === "timer555" ? "IC" :
+                   comp.type === "lm7805" ? "VR" :
+                   comp.type === "bjt" ? "Q" :
+                   comp.type === "mosfet" ? "M" :
+                   comp.type === "relay" ? "RL" :
                    comp.type === "ldr" ? "LDR" :
-                   comp.type === "thermistor" ? "TH" : "SEN";
+                   comp.type === "thermistor" ? "TH" : 
+                   comp.type === "and_gate" ? "AND" :
+                   comp.type === "or_gate" ? "OR" :
+                   comp.type === "not_gate" ? "NOT" : "SEN";
     
     // Find highest index
     const matching = state.components.filter(c => c.id.startsWith(prefix));

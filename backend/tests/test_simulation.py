@@ -87,7 +87,21 @@ def test_rectifier_simulation():
     # Vdc should be Vm / pi ~ 120*sqrt(2) / pi = 54.02V (wait: for half-wave it is Vm / 2pi ~ 27.01V)
     res = RectifierSimulator.simulate(topology="half_wave", is_controlled=False, voltage_rms=120.0, frequency=60.0, load_r=10.0)
     
-    expected_vdc = (120.0 * math.sqrt(2.0)) / (2.0 * math.pi) # ~ 27.01V
+    expected_vdc = (120.0 * math.sqrt(2.0)) / math.pi # ~ 54.02V
     assert math.isclose(res["average_voltage"], expected_vdc, rel_tol=1e-2)
     # Output arrays must have elements
     assert len(res["waveforms"]["time"]) == 400
+
+def test_three_phase_rectifier_simulation():
+    # Three-phase uncontrolled bridge rectifier, 120V RMS phase-to-neutral, 60Hz, 10 Ohm load
+    # Vdc should be 3 * sqrt(3) / pi * Vm ~ 1.654 * Vm
+    # Vm = 120 * sqrt(2) ~ 169.7V, Vdc ~ 280.7V
+    res = RectifierSimulator.simulate(topology="three_phase_bridge", is_controlled=False, voltage_rms=120.0, frequency=60.0, load_r=10.0)
+    
+    vm = 120.0 * math.sqrt(2.0)
+    expected_vdc = (3.0 * math.sqrt(3.0) / math.pi) * vm
+    assert "error" not in res
+    assert math.isclose(res["average_voltage"], expected_vdc, rel_tol=1e-2)
+    assert len(res["waveforms"]["time"]) == 400
+    assert "input_voltage_b" in res["waveforms"]
+    assert "input_voltage_c" in res["waveforms"]

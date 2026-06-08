@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .database import engine, Base
-from .routes import auth, circuits, machines, power_electronics, ai, reports
+from .routes import auth, circuits, machines, power_electronics, ai, reports, power_systems
 
 # Automatically create tables in database (SQLite or PostgreSQL) at startup
 Base.metadata.create_all(bind=engine)
@@ -46,6 +46,7 @@ app.include_router(machines.router, prefix=settings.API_V1_STR)
 app.include_router(power_electronics.router, prefix=settings.API_V1_STR)
 app.include_router(ai.router, prefix=settings.API_V1_STR)
 app.include_router(reports.router, prefix=settings.API_V1_STR)
+app.include_router(power_systems.router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def read_root():

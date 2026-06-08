@@ -498,7 +498,7 @@ export default function MachinesStudio() {
               <div className="flex-1 min-h-0">
                 <ResponsiveContainer width="100%" height="90%">
                   {machine === "Transformer" ? (
-                    <LineChart data={getCurveData()} margin={{ top: 5, right: 10, bottom: 5, left: -20 }}>
+                    <LineChart data={getCurveData() as any[]} margin={{ top: 5, right: 10, bottom: 5, left: -20 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="loadFraction" tick={{ fontSize: 9 }} stroke="#94a3b8" />
                       <YAxis domain={[90, 100]} tick={{ fontSize: 9 }} stroke="#94a3b8" />
@@ -507,7 +507,7 @@ export default function MachinesStudio() {
                       <Line type="monotone" dataKey="Efficiency" stroke="#3b82f6" strokeWidth={2.5} activeDot={{ r: 6 }} />
                     </LineChart>
                   ) : (
-                    <LineChart data={getCurveData()} margin={{ top: 5, right: 10, bottom: 5, left: -20 }}>
+                    <LineChart data={getCurveData() as any[]} margin={{ top: 5, right: 10, bottom: 5, left: -20 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="speed" tick={{ fontSize: 9 }} stroke="#94a3b8" />
                       <YAxis tick={{ fontSize: 9 }} stroke="#94a3b8" />

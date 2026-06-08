@@ -19,6 +19,34 @@ class CircuitSolver:
           {"id": "V1", "type": "dc_source", "value": 12.0, "nodes": [1, 0]}
         nodes_count: Maximum node index in the circuit (Node 0 is always Ground).
         """
+        # Map complex/sensor/IC components to MNA primitives
+        mna_components = []
+        for c in components:
+            ctype = c["type"]
+            cid = c["id"]
+            nodes = c["nodes"]
+            val = float(c["value"])
+            
+            if ctype in ("resistor", "ldr", "thermistor", "bjt", "mosfet", "relay"):
+                mna_components.append({"id": cid, "type": "resistor", "value": val, "nodes": nodes})
+            elif ctype == "hall_sensor":
+                mna_components.append({"id": cid, "type": "resistor", "value": 0.01, "nodes": nodes})
+            elif ctype == "lm7805":
+                mna_components.append({"id": cid, "type": "dc_source", "value": 5.0, "nodes": nodes})
+            elif ctype == "lm35":
+                v_out = val * 0.01 if val > 2.0 else val
+                mna_components.append({"id": cid, "type": "dc_source", "value": v_out, "nodes": nodes})
+            elif ctype == "timer555":
+                mna_components.append({"id": cid, "type": "ac_source", "value": 5.0, "frequency": 50.0, "nodes": nodes})
+            elif ctype == "opamp":
+                mna_components.append({"id": cid, "type": "resistor", "value": 100000.0, "nodes": nodes})
+            elif ctype in ("and_gate", "or_gate", "not_gate"):
+                mna_components.append({"id": cid, "type": "resistor", "value": 1000.0, "nodes": nodes})
+            else:
+                mna_components.append({"id": cid, "type": ctype, "value": val, "nodes": nodes})
+                
+        components = mna_components
+
         # 1. Map nodes. Ground node is index 0. Active nodes are 1 to nodes_count.
         # N is the number of active nodes (excluding ground).
         N = nodes_count
@@ -244,7 +272,7 @@ class CircuitSolver:
                 # Current through source flows from negative terminal to positive terminal usually,
                 # but MNA output is defined as current entering positive node.
                 # So P = v_diff * (-i_comp)
-                power[comp["id"]] = -v_diff * i_comp
+                power[comp["id"]] = v_diff * i_comp
             else:
                 power[comp["id"]] = v_diff * i_comp
                 
@@ -261,6 +289,34 @@ class CircuitSolver:
         Solves the circuit in time domain (Transient analysis) using Backward Euler integration.
         Returns a time series of node voltages and branch currents.
         """
+        # Map complex/sensor/IC components to MNA primitives
+        mna_components = []
+        for c in components:
+            ctype = c["type"]
+            cid = c["id"]
+            nodes = c["nodes"]
+            val = float(c["value"])
+            
+            if ctype in ("resistor", "ldr", "thermistor", "bjt", "mosfet", "relay"):
+                mna_components.append({"id": cid, "type": "resistor", "value": val, "nodes": nodes})
+            elif ctype == "hall_sensor":
+                mna_components.append({"id": cid, "type": "resistor", "value": 0.01, "nodes": nodes})
+            elif ctype == "lm7805":
+                mna_components.append({"id": cid, "type": "dc_source", "value": 5.0, "nodes": nodes})
+            elif ctype == "lm35":
+                v_out = val * 0.01 if val > 2.0 else val
+                mna_components.append({"id": cid, "type": "dc_source", "value": v_out, "nodes": nodes})
+            elif ctype == "timer555":
+                mna_components.append({"id": cid, "type": "ac_source", "value": 5.0, "frequency": 50.0, "nodes": nodes})
+            elif ctype == "opamp":
+                mna_components.append({"id": cid, "type": "resistor", "value": 100000.0, "nodes": nodes})
+            elif ctype in ("and_gate", "or_gate", "not_gate"):
+                mna_components.append({"id": cid, "type": "resistor", "value": 1000.0, "nodes": nodes})
+            else:
+                mna_components.append({"id": cid, "type": ctype, "value": val, "nodes": nodes})
+                
+        components = mna_components
+
         # Time steps array
         time_steps = np.arange(0, t_stop, step)
         steps_count = len(time_steps)

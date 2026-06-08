@@ -65,6 +65,42 @@ export default function CircuitStudio() {
     addComponent({ type: "capacitor", value: 0.00001, nodes: [2, 0] });
   };
 
+  const load555Astable = () => {
+    clearCircuit();
+    addComponent({ type: "dc_source", value: 5, nodes: [1, 0] });
+    addComponent({ type: "timer555", value: 5, nodes: [1, 0] });
+    addComponent({ type: "resistor", value: 10000, nodes: [1, 2] });
+    addComponent({ type: "resistor", value: 47000, nodes: [2, 3] });
+    addComponent({ type: "capacitor", value: 0.0000001, nodes: [3, 0] });
+  };
+
+  const loadLM7805Regulator = () => {
+    clearCircuit();
+    addComponent({ type: "dc_source", value: 9, nodes: [1, 0] });
+    addComponent({ type: "lm7805", value: 5, nodes: [1, 0] });
+    addComponent({ type: "capacitor", value: 0.00000033, nodes: [1, 0] });
+    addComponent({ type: "capacitor", value: 0.0000001, nodes: [2, 0] });
+    addComponent({ type: "resistor", value: 220, nodes: [2, 0] });
+  };
+
+  const loadOpAmpIntegrator = () => {
+    clearCircuit();
+    addComponent({ type: "ac_source", value: 5, nodes: [1, 0] });
+    addComponent({ type: "resistor", value: 10000, nodes: [1, 2] });
+    addComponent({ type: "opamp", value: 100000, nodes: [0, 2] });
+    addComponent({ type: "capacitor", value: 0.00000001, nodes: [2, 3] });
+  };
+
+  const loadBJTSwitch = () => {
+    clearCircuit();
+    addComponent({ type: "dc_source", value: 5, nodes: [1, 0] });
+    addComponent({ type: "resistor", value: 1000, nodes: [1, 2] });
+    addComponent({ type: "bjt", value: 100, nodes: [2, 3] });
+    addComponent({ type: "diode", value: 0.7, nodes: [4, 3] });
+    addComponent({ type: "resistor", value: 330, nodes: [5, 4] });
+    addComponent({ type: "dc_source", value: 9, nodes: [5, 0] });
+  };
+
   const handleUpdateComponent = () => {
     if (!selectedComponentId) return;
     updateComponent(selectedComponentId, {
@@ -298,7 +334,15 @@ export default function CircuitStudio() {
               { type: "timer555", label: "555 Timer IC", value: 5, nodes: [1, 0] },
               { type: "ldr", label: "LDR Sensor", value: 1000, nodes: [1, 0] },
               { type: "thermistor", label: "Thermistor", value: 10000, nodes: [1, 0] },
-              { type: "lm35", label: "LM35 Temp", value: 0.25, nodes: [1, 0] }
+              { type: "lm35", label: "LM35 Temp", value: 0.25, nodes: [1, 0] },
+              { type: "bjt", label: "NPN BJT", value: 100, nodes: [1, 2] },
+              { type: "mosfet", label: "N-MOSFET", value: 50, nodes: [1, 2] },
+              { type: "relay", label: "5V Relay", value: 70, nodes: [1, 0] },
+              { type: "lm7805", label: "LM7805 5V", value: 5.0, nodes: [1, 0] },
+              { type: "hall_sensor", label: "Hall Sensor", value: 0.1, nodes: [1, 0] },
+              { type: "and_gate", label: "AND Gate", value: 5, nodes: [1, 2] },
+              { type: "or_gate", label: "OR Gate", value: 5, nodes: [1, 2] },
+              { type: "not_gate", label: "NOT Gate", value: 5, nodes: [1, 2] }
             ].map((item) => (
               <button
                 key={item.type}
@@ -357,12 +401,41 @@ export default function CircuitStudio() {
             )}
           </div>
           
-          <button
-            onClick={loadRCExample}
-            className="w-full mt-2 p-2 rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100/50 transition-all"
-          >
-            Load Series RC Demo
-          </button>
+          <div className="border-t border-slate-200 dark:border-slate-800 pt-2.5 mt-2">
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Preset Templates</h3>
+            <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+              <button
+                onClick={loadRCExample}
+                className="text-left p-1.5 rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 font-medium transition-all truncate"
+              >
+                RC Transient
+              </button>
+              <button
+                onClick={load555Astable}
+                className="text-left p-1.5 rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 font-medium transition-all truncate"
+              >
+                555 Astable
+              </button>
+              <button
+                onClick={loadLM7805Regulator}
+                className="text-left p-1.5 rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 font-medium transition-all truncate"
+              >
+                7805 Regulator
+              </button>
+              <button
+                onClick={loadOpAmpIntegrator}
+                className="text-left p-1.5 rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 font-medium transition-all truncate"
+              >
+                Op-Amp Integrator
+              </button>
+              <button
+                onClick={loadBJTSwitch}
+                className="col-span-2 text-left p-1.5 rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 font-medium transition-all truncate"
+              >
+                BJT Transistor Switch
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -535,6 +608,72 @@ export default function CircuitStudio() {
                           {/* Sensor block */}
                           <rect x={midX-10} y={midY-10} width="20" height="20" fill="none" stroke="#ef4444" strokeWidth="1.5" />
                           <text x={midX} y={midY+3} textAnchor="middle" fill="#ef4444" fontSize="7" fontWeight="bold">LM35</text>
+                        </g>
+                      )}
+                      {comp.type === "bjt" && (
+                        <g>
+                          <line x1={midX-6} y1={midY-10} x2={midX-6} y2={midY+10} stroke="#3b82f6" strokeWidth="2" />
+                          <line x1={midX-12} y1={midY} x2={midX-6} y2={midY} stroke="#3b82f6" strokeWidth="1.5" />
+                          <line x1={midX-6} y1={midY-5} x2={midX+6} y2={midY-12} stroke="#3b82f6" strokeWidth="1.5" />
+                          <line x1={midX-6} y1={midY+5} x2={midX+6} y2={midY+12} stroke="#3b82f6" strokeWidth="1.5" />
+                          <polygon points={`${midX+2},${midY+8} ${midX+6},${midY+12} ${midX+1},${midY+13}`} fill="#3b82f6" />
+                        </g>
+                      )}
+                      {comp.type === "mosfet" && (
+                        <g>
+                          <line x1={midX-6} y1={midY-8} x2={midX-6} y2={midY+8} stroke="#10b981" strokeWidth="2" strokeDasharray="3,2" />
+                          <line x1={midX-10} y1={midY-8} x2={midX-10} y2={midY+8} stroke="#10b981" strokeWidth="2" />
+                          <line x1={midX-12} y1={midY} x2={midX-10} y2={midY} stroke="#10b981" strokeWidth="1.5" />
+                          <line x1={midX-6} y1={midY-6} x2={midX+6} y2={midY-6} stroke="#10b981" strokeWidth="1.5" />
+                          <line x1={midX-6} y1={midY+6} x2={midX+6} y2={midY+6} stroke="#10b981" strokeWidth="1.5" />
+                          <polygon points={`${midX-6},${midY} ${midX},${midY-3} ${midX},${midY+3}`} fill="#10b981" />
+                        </g>
+                      )}
+                      {comp.type === "relay" && (
+                        <g>
+                          <rect x={midX-10} y={midY-10} width="10" height="20" fill="none" stroke="#f59e0b" strokeWidth="1.5" />
+                          <line x1={midX-5} y1={midY-10} x2={midX-5} y2={midY+10} stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="2,2" />
+                          <line x1={midX+4} y1={midY-8} x2={midX+10} y2={midY} stroke="#f59e0b" strokeWidth="1.5" />
+                          <circle cx={midX+4} cy={midY-8} r="1.5" fill="#f59e0b" />
+                          <circle cx={midX+10} cy={midY} r="1.5" fill="#f59e0b" />
+                          <circle cx={midX+10} cy={midY+8} r="1.5" fill="#f59e0b" />
+                        </g>
+                      )}
+                      {comp.type === "lm7805" && (
+                        <g>
+                          <rect x={midX-12} y={midY-8} width="24" height="16" rx="1" fill="none" stroke="#64748b" strokeWidth="1.5" />
+                          <text x={midX} y={midY+3} textAnchor="middle" fill="#64748b" fontSize="6" fontWeight="bold">7805</text>
+                        </g>
+                      )}
+                      {comp.type === "hall_sensor" && (
+                        <g>
+                          <circle cx={midX} cy={midY} r="9" fill="none" stroke="#8b5cf6" strokeWidth="1.5" />
+                          <path d={`M ${midX-6},${midY+2} L ${midX+6},${midY-2}`} stroke="#8b5cf6" strokeWidth="1.5" />
+                          <text x={midX} y={midY-4} textAnchor="middle" fill="#8b5cf6" fontSize="5" fontWeight="bold">HALL</text>
+                        </g>
+                      )}
+                      {comp.type === "and_gate" && (
+                        <g>
+                          <path d={`M ${midX-8},${midY-8} L ${midX-2},${midY-8} A 8 8 0 0 1 ${midX-2},${midY+8} L ${midX-8},${midY+8} Z`} fill="none" stroke="#f59e0b" strokeWidth="1.5" />
+                          <line x1={midX-12} y1={midY-4} x2={midX-8} y2={midY-4} stroke="#f59e0b" strokeWidth="1.5" />
+                          <line x1={midX-12} y1={midY+4} x2={midX-8} y2={midY+4} stroke="#f59e0b" strokeWidth="1.5" />
+                          <line x1={midX+6} y1={midY} x2={midX+12} y2={midY} stroke="#f59e0b" strokeWidth="1.5" />
+                        </g>
+                      )}
+                      {comp.type === "or_gate" && (
+                        <g>
+                          <path d={`M ${midX-8},${midY-8} Q ${midX-4},${midY} ${midX-8},${midY+8} Q ${midX+2},${midY+8} ${midX+8},${midY} Q ${midX+2},${midY-8} ${midX-8},${midY-8}`} fill="none" stroke="#f59e0b" strokeWidth="1.5" />
+                          <line x1={midX-12} y1={midY-4} x2={midX-6} y2={midY-4} stroke="#f59e0b" strokeWidth="1.5" />
+                          <line x1={midX-12} y1={midY+4} x2={midX-6} y2={midY+4} stroke="#f59e0b" strokeWidth="1.5" />
+                          <line x1={midX+8} y1={midY} x2={midX+12} y2={midY} stroke="#f59e0b" strokeWidth="1.5" />
+                        </g>
+                      )}
+                      {comp.type === "not_gate" && (
+                        <g>
+                          <polygon points={`${midX-6},${midY-6} ${midX-6},${midY+6} ${midX+2},${midY}`} fill="none" stroke="#f59e0b" strokeWidth="1.5" />
+                          <circle cx={midX+4} cy={midY} r="2" fill="none" stroke="#f59e0b" strokeWidth="1.5" />
+                          <line x1={midX-12} y1={midY} x2={midX-6} y2={midY} stroke="#f59e0b" strokeWidth="1.5" />
+                          <line x1={midX+6} y1={midY} x2={midX+12} y2={midY} stroke="#f59e0b" strokeWidth="1.5" />
                         </g>
                       )}
                     </g>
