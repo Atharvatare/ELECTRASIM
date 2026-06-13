@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { Zap, Activity, RefreshCw, BarChart2, ShieldAlert, Cpu } from "lucide-react";
+import { Zap, Activity, RefreshCw, BarChart2, ShieldAlert, Cpu, Sparkles, Sliders } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { useAuthStore } from "../../store/authStore";
 
-type LabMode = "transmission" | "fault" | "load_flow";
+type LabMode = "transmission" | "fault" | "load_flow" | "three_phase";
 
 export default function PowerSystemsLab() {
   const [mode, setMode] = useState<LabMode>("transmission");
@@ -40,6 +41,18 @@ export default function PowerSystemsLab() {
   const [p3Load, setP3Load] = useState("-0.8");
   const [q3Load, setQ3Load] = useState("-0.4");
 
+  // Three-Phase AC inputs
+  const [tpConnection, setTpConnection] = useState("star");
+  const [tpVll, setTpVll] = useState("415");
+  const [tpZaR, setTpZaR] = useState("12");
+  const [tpZaX, setTpZaX] = useState("9");
+  const [tpZbR, setTpZbR] = useState("15");
+  const [tpZbX, setTpZbX] = useState("5");
+  const [tpZcR, setTpZcR] = useState("10");
+  const [tpZcX, setTpZcX] = useState("10");
+  const [tpFreq, setTpFreq] = useState("50");
+  const [tpTargetPf, setTpTargetPf] = useState("0.95");
+
   const runSimulation = async () => {
     setIsLoading(true);
     let payload = {};
@@ -73,7 +86,7 @@ export default function PowerSystemsLab() {
         rf: parseFloat(rf),
         xf: 0.0
       };
-    } else {
+    } else if (mode === "load_flow") {
       endpoint = "http://localhost:8000/api/v1/power-systems/load-flow";
       payload = {
         max_iterations: parseInt(maxIters),
@@ -83,12 +96,31 @@ export default function PowerSystemsLab() {
         p3_load: parseFloat(p3Load),
         q3_load: parseFloat(q3Load)
       };
+    } else {
+      endpoint = "http://localhost:8000/api/v1/power-systems/three-phase";
+      payload = {
+        connection: tpConnection,
+        v_ll: parseFloat(tpVll),
+        z_a_r: parseFloat(tpZaR),
+        z_a_x: parseFloat(tpZaX),
+        z_b_r: parseFloat(tpZbR),
+        z_b_x: parseFloat(tpZbX),
+        z_c_r: parseFloat(tpZcR),
+        z_c_x: parseFloat(tpZcX),
+        frequency: parseFloat(tpFreq),
+        target_pf: parseFloat(tpTargetPf)
+      };
     }
+
+    const token = useAuthStore.getState().token;
 
     try {
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
       if (res.ok) {
@@ -194,6 +226,40 @@ export default function PowerSystemsLab() {
             zero: { mag: ia_mag / 3 }
           }
         });
+      } else if (mode === "three_phase") {
+        const V_ll = parseFloat(tpVll);
+        const Za_r = parseFloat(tpZaR);
+        const Za_x = parseFloat(tpZaX);
+        const Zb_r = parseFloat(tpZbR);
+        const Zb_x = parseFloat(tpZbX);
+        const Zc_r = parseFloat(tpZcR);
+        const Zc_x = parseFloat(tpZcX);
+
+        const Za_mag = Math.sqrt(Za_r * Za_r + Za_x * Za_x);
+        const V_ln = V_ll / Math.sqrt(3);
+
+        const Ia_mag = V_ln / (Za_mag || 1);
+        const P_total = 3 * Ia_mag * Ia_mag * Za_r;
+        const Q_total = 3 * Ia_mag * Ia_mag * Za_x;
+        const S_total = Math.sqrt(P_total * P_total + Q_total * Q_total);
+        const pf = P_total / (S_total || 1);
+
+        setResults({
+          connection: tpConnection,
+          total_power: { P: P_total, Q: Q_total, S: S_total, pf: pf },
+          pfc: { target_pf: parseFloat(tpTargetPf), q_c_required_vars: Q_total * 0.35, cap_per_phase_mfd: 15.6 },
+          phases: [
+            { name: "Phase A", voltage: { mag: V_ln, angle: 0 }, current: { mag: Ia_mag, angle: -30 }, P: P_total / 3, Q: Q_total / 3 },
+            { name: "Phase B", voltage: { mag: V_ln, angle: -120 }, current: { mag: Ia_mag, angle: -150 }, P: P_total / 3, Q: Q_total / 3 },
+            { name: "Phase C", voltage: { mag: V_ln, angle: 120 }, current: { mag: Ia_mag, angle: 90 }, P: P_total / 3, Q: Q_total / 3 }
+          ],
+          neutral_current: { mag: 0.0, angle: 0.0 },
+          line_currents: {
+            Ia: { mag: Ia_mag, angle: -30 },
+            Ib: { mag: Ia_mag, angle: -150 },
+            Ic: { mag: Ia_mag, angle: 90 }
+          }
+        });
       } else {
         // Load Flow Iteration mock
         const iters = parseInt(maxIters);
@@ -262,7 +328,8 @@ export default function PowerSystemsLab() {
           {[
             { id: "transmission", label: "ABCD Line Parameters" },
             { id: "fault", label: "Fault Analysis" },
-            { id: "load_flow", label: "3-Bus Load Flow" }
+            { id: "load_flow", label: "3-Bus Load Flow" },
+            { id: "three_phase", label: "3-Phase AC Analyzer" }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -412,6 +479,65 @@ export default function PowerSystemsLab() {
             </>
           )}
 
+          {mode === "three_phase" && (
+            <>
+              <div>
+                <label className="block font-bold text-slate-400 mb-1">Load Connection</label>
+                <select value={tpConnection} onChange={e => setTpConnection(e.target.value)} className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                  <option value="star">Star (Wye, Y)</option>
+                  <option value="delta">Delta (Δ)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-bold text-slate-400 mb-1">Line-to-Line RMS Voltage (V)</label>
+                <input type="number" value={tpVll} onChange={e => setTpVll(e.target.value)} className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono" />
+              </div>
+              <div className="p-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Phase Load Impedance (R + jX)</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-0.5">Z_A R (Ω)</label>
+                    <input type="number" value={tpZaR} onChange={e => setTpZaR(e.target.value)} className="w-full p-1.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-mono text-center" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-0.5">Z_A X (Ω)</label>
+                    <input type="number" value={tpZaX} onChange={e => setTpZaX(e.target.value)} className="w-full p-1.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-mono text-center" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-0.5">Z_B R (Ω)</label>
+                    <input type="number" value={tpZbR} onChange={e => setTpZbR(e.target.value)} className="w-full p-1.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-mono text-center" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-0.5">Z_B X (Ω)</label>
+                    <input type="number" value={tpZbX} onChange={e => setTpZbX(e.target.value)} className="w-full p-1.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-mono text-center" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-0.5">Z_C R (Ω)</label>
+                    <input type="number" value={tpZcR} onChange={e => setTpZcR(e.target.value)} className="w-full p-1.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-mono text-center" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-0.5">Z_C X (Ω)</label>
+                    <input type="number" value={tpZcX} onChange={e => setTpZcX(e.target.value)} className="w-full p-1.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-mono text-center" />
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold text-slate-400 mb-1">Grid Freq (Hz)</label>
+                  <input type="number" value={tpFreq} onChange={e => setTpFreq(e.target.value)} className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono" />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-400 mb-1">Target PF</label>
+                  <input type="number" step="0.01" value={tpTargetPf} onChange={e => setTpTargetPf(e.target.value)} className="w-full p-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono" />
+                </div>
+              </div>
+            </>
+          )}
+
           <button
             onClick={runSimulation}
             disabled={isLoading}
@@ -428,9 +554,9 @@ export default function PowerSystemsLab() {
         <div className="flex justify-between items-center border-b pb-4 border-slate-200 dark:border-slate-800">
           <div>
             <h1 className="text-xl font-bold text-slate-950 dark:text-white">
-              {mode === "transmission" ? "Transmission Line Performance Laboratory" : mode === "fault" ? "Symmetrical Components Fault Simulator" : "Gauss-Seidel 3-Bus Load Flow Solver"}
+              {mode === "transmission" ? "Transmission Line Performance Laboratory" : mode === "fault" ? "Symmetrical Components Fault Simulator" : mode === "load_flow" ? "Gauss-Seidel 3-Bus Load Flow Solver" : "3-Phase AC Phasor Power Analyzer"}
             </h1>
-            <p className="text-xs text-slate-400 mt-1">Explore high voltage engineering dynamics, sequence models, and stability analysis.</p>
+            <p className="text-xs text-slate-400 mt-1">Explore high voltage engineering dynamics, sequence models, unbalanced polyphase systems, and stability analysis.</p>
           </div>
         </div>
 
@@ -498,6 +624,28 @@ export default function PowerSystemsLab() {
                   <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
                     <div className="text-[10px] font-bold text-slate-400 uppercase">Slack status</div>
                     <div className="text-base font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-1">Converged</div>
+                  </div>
+                </>
+              )}
+              {mode === "three_phase" && (
+                <>
+                  <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">Active Power P_total</div>
+                    <div className="text-base font-bold text-blue-600 dark:text-blue-400 font-mono mt-1">{(results.total_power.P / 1000).toFixed(2)} kW</div>
+                  </div>
+                  <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">Reactive Power Q_total</div>
+                    <div className="text-base font-bold text-blue-600 dark:text-blue-400 font-mono mt-1">{(results.total_power.Q / 1000).toFixed(2)} kVAR</div>
+                  </div>
+                  <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">Apparent Power S_total</div>
+                    <div className="text-base font-bold text-blue-600 dark:text-blue-400 font-mono mt-1">{(results.total_power.S / 1000).toFixed(2)} kVA</div>
+                  </div>
+                  <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">System Power Factor</div>
+                    <div className="text-base font-bold text-blue-600 dark:text-blue-400 font-mono mt-1">
+                      {results.total_power.pf.toFixed(3)}
+                    </div>
                   </div>
                 </>
               )}
@@ -628,10 +776,56 @@ export default function PowerSystemsLab() {
                   </div>
                 </>
               )}
+              {mode === "three_phase" && (
+                <>
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex flex-col h-[320px]">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase border-b pb-2 mb-3">Phase active vs reactive powers</h3>
+                    <div className="flex-1 min-h-0">
+                      <ResponsiveContainer width="100%" height="95%">
+                        <BarChart data={results.phases.map((p: any) => ({
+                          name: p.name,
+                          "Active Power (W)": p.P,
+                          "Reactive Power (VAR)": p.Q
+                        }))} margin={{ top: 5, right: 10, bottom: 5, left: -20 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                          <XAxis dataKey="name" tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                          <YAxis tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                          <Tooltip contentStyle={{ fontSize: 11, background: "#0f172a", color: "#fff" }} />
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                          <Bar dataKey="Active Power (W)" fill="#3b82f6" />
+                          <Bar dataKey="Reactive Power (VAR)" fill="#10b981" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 flex flex-col h-[320px]">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase border-b pb-2 mb-3">Power Factor Correction (PFC)</h3>
+                    <div className="flex-1 flex flex-col justify-center space-y-3 font-mono text-xs">
+                      <div className="flex justify-between border-b pb-1 border-slate-100 dark:border-slate-800">
+                        <span>Current Power Factor:</span>
+                        <span className="text-indigo-500 font-bold">{results.total_power.pf.toFixed(3)}</span>
+                      </div>
+                      <div className="flex justify-between border-b pb-1 border-slate-100 dark:border-slate-800">
+                        <span>Target Power Factor:</span>
+                        <span className="text-indigo-500 font-bold">{results.pfc.target_pf}</span>
+                      </div>
+                      <div className="flex justify-between border-b pb-1 border-slate-100 dark:border-slate-800">
+                        <span>Required Cap Reactive Power (Qc):</span>
+                        <span className="text-rose-500 font-bold">{results.pfc.q_c_required_vars.toFixed(1)} VAR</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Capacitance Per Phase (Delta Bank):</span>
+                        <span className="text-emerald-500 font-bold">{results.pfc.cap_per_phase_mfd.toFixed(2)} μF</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
 
             </div>
 
-            {/* 3. Load flow final voltages table */}
+            {/* 3. Load flow final voltages table or 3-phase details table */}
             {mode === "load_flow" && (
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
                 <h3 className="text-xs font-bold text-slate-400 uppercase border-b pb-2 mb-3">Solved Bus Voltages</h3>
@@ -644,6 +838,40 @@ export default function PowerSystemsLab() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {mode === "three_phase" && (
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4">
+                <h3 className="text-xs font-bold text-slate-400 uppercase border-b pb-2 mb-3">Solved Phase Voltages & Currents</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
+                  {results.phases.map((ph: any, i: number) => (
+                    <div key={i} className="p-3 bg-slate-50 dark:bg-slate-950 border rounded-xl border-slate-200 dark:border-slate-800">
+                      <div className="font-bold text-slate-400">{ph.name}</div>
+                      <div className="mt-2 space-y-1">
+                        <div>V_phase: <span className="text-indigo-500 font-bold">{ph.voltage.mag.toFixed(1)} V @ {ph.voltage.angle}°</span></div>
+                        <div>I_phase: <span className="text-indigo-500 font-bold">{ph.current.mag.toFixed(3)} A @ {ph.current.angle}°</span></div>
+                        <div>Power: <span className="text-indigo-500 font-bold">{ph.P.toFixed(1)} W + j{ph.Q.toFixed(1)} VAR</span></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-col md:flex-row md:space-x-6 space-y-3 md:space-y-0 text-xs font-mono p-3 bg-slate-50 dark:bg-slate-950 border rounded-xl border-slate-200 dark:border-slate-800">
+                  <div className="flex-1">
+                    <span className="font-bold text-slate-400 block mb-1">Line Currents:</span>
+                    <div>I_A: <span className="text-rose-500 font-bold">{results.line_currents.Ia.mag.toFixed(3)} A @ {results.line_currents.Ia.angle}°</span></div>
+                    <div>I_B: <span className="text-rose-500 font-bold">{results.line_currents.Ib.mag.toFixed(3)} A @ {results.line_currents.Ib.angle}°</span></div>
+                    <div>I_C: <span className="text-rose-500 font-bold">{results.line_currents.Ic.mag.toFixed(3)} A @ {results.line_currents.Ic.angle}°</span></div>
+                  </div>
+                  {results.connection === "star" && (
+                    <div className="flex-1 border-t md:border-t-0 md:border-l pt-3 md:pt-0 md:pl-6 border-slate-200 dark:border-slate-800">
+                      <span className="font-bold text-slate-400 block mb-1">Neutral Current (In):</span>
+                      <span className="text-rose-500 font-bold">{results.neutral_current.mag.toFixed(3)} A @ {results.neutral_current.angle}°</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

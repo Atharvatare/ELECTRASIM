@@ -238,3 +238,164 @@ def run_load_flow(req: LoadFlowRequest, current_user: User = Depends(get_current
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+class ThreePhaseRequest(BaseModel):
+    connection: str  # "star" or "delta"
+    v_ll: float      # Line-to-line RMS voltage (V)
+    z_a_r: float     # Phase A (or AB) resistance (ohms)
+    z_a_x: float     # Phase A (or AB) reactance (ohms)
+    z_b_r: float     # Phase B (or BC) resistance (ohms)
+    z_b_x: float     # Phase B (or BC) reactance (ohms)
+    z_c_r: float     # Phase C (or CA) resistance (ohms)
+    z_c_x: float     # Phase C (or CA) reactance (ohms)
+    frequency: float = 50.0
+    target_pf: float = 0.95
+
+@router.post("/three-phase")
+def calculate_three_phase(req: ThreePhaseRequest, current_user: User = Depends(get_current_user)):
+    try:
+        V_ll = req.v_ll
+        Za = complex(req.z_a_r, req.z_a_x)
+        Zb = complex(req.z_b_r, req.z_b_x)
+        Zc = complex(req.z_c_r, req.z_c_x)
+        f = req.frequency
+        t_pf = req.target_pf
+
+        # Phase sequence components
+        # Phase A as reference angle 0
+        if req.connection.lower() == "star":
+            # Phase voltages (Line-to-Neutral)
+            V_ln = V_ll / math.sqrt(3.0)
+            Va = cmath.rect(V_ln, 0.0)
+            Vb = cmath.rect(V_ln, -2.0 * math.pi / 3.0)
+            Vc = cmath.rect(V_ln, 2.0 * math.pi / 3.0)
+
+            # Phase/Line currents
+            Ia = Va / Za if abs(Za) > 1e-6 else 0j
+            Ib = Vb / Zb if abs(Zb) > 1e-6 else 0j
+            Ic = Vc / Zc if abs(Zc) > 1e-6 else 0j
+            In = Ia + Ib + Ic # Neutral current
+
+            # Apparent power per phase
+            Sa = Va * Ia.conjugate()
+            Sb = Vb * Ib.conjugate()
+            Sc = Vc * Ic.conjugate()
+
+            P_total = Sa.real + Sb.real + Sc.real
+            Q_total = Sa.imag + Sb.imag + Sc.imag
+
+            # Pack response details
+            phases = [
+                {
+                    "name": "Phase A",
+                    "voltage": {"mag": round(abs(Va), 2), "angle": round(math.degrees(cmath.phase(Va)), 1)},
+                    "current": {"mag": round(abs(Ia), 3), "angle": round(math.degrees(cmath.phase(Ia)), 1)},
+                    "P": round(Sa.real, 2), "Q": round(Sa.imag, 2)
+                },
+                {
+                    "name": "Phase B",
+                    "voltage": {"mag": round(abs(Vb), 2), "angle": round(math.degrees(cmath.phase(Vb)), 1)},
+                    "current": {"mag": round(abs(Ib), 3), "angle": round(math.degrees(cmath.phase(Ib)), 1)},
+                    "P": round(Sb.real, 2), "Q": round(Sb.imag, 2)
+                },
+                {
+                    "name": "Phase C",
+                    "voltage": {"mag": round(abs(Vc), 2), "angle": round(math.degrees(cmath.phase(Vc)), 1)},
+                    "current": {"mag": round(abs(Ic), 3), "angle": round(math.degrees(cmath.phase(Ic)), 1)},
+                    "P": round(Sc.real, 2), "Q": round(Sc.imag, 2)
+                }
+            ]
+            neutral = {"mag": round(abs(In), 3), "angle": round(math.degrees(cmath.phase(In)), 1)}
+
+        else: # Delta
+            # Line-to-line voltages
+            Vab = cmath.rect(V_ll, math.pi / 6.0) # 30 deg
+            Vbc = cmath.rect(V_ll, -math.pi / 2.0) # -90 deg
+            Vca = cmath.rect(V_ll, 5.0 * math.pi / 6.0) # 150 deg
+
+            # Delta branch currents
+            Iab = Vab / Za if abs(Za) > 1e-6 else 0j
+            Ibc = Vbc / Zb if abs(Zb) > 1e-6 else 0j
+            Ica = Vca / Zc if abs(Zc) > 1e-6 else 0j
+
+            # Line currents (KCL)
+            Ia = Iab - Ica
+            Ib = Ibc - Iab
+            Ic = Ica - Ibc
+
+            # Apparent power per branch
+            Sab = Vab * Iab.conjugate()
+            Sbc = Vbc * Ibc.conjugate()
+            Sca = Vca * Ica.conjugate()
+
+            P_total = Sab.real + Sbc.real + Sca.real
+            Q_total = Sab.imag + Sbc.imag + Sca.imag
+
+            phases = [
+                {
+                    "name": "Phase AB",
+                    "voltage": {"mag": round(abs(Vab), 2), "angle": round(math.degrees(cmath.phase(Vab)), 1)},
+                    "current": {"mag": round(abs(Iab), 3), "angle": round(math.degrees(cmath.phase(Iab)), 1)},
+                    "P": round(Sab.real, 2), "Q": round(Sab.imag, 2)
+                },
+                {
+                    "name": "Phase BC",
+                    "voltage": {"mag": round(abs(Vbc), 2), "angle": round(math.degrees(cmath.phase(Vbc)), 1)},
+                    "current": {"mag": round(abs(Ibc), 3), "angle": round(math.degrees(cmath.phase(Ibc)), 1)},
+                    "P": round(Sbc.real, 2), "Q": round(Sbc.imag, 2)
+                },
+                {
+                    "name": "Phase CA",
+                    "voltage": {"mag": round(abs(Vca), 2), "angle": round(math.degrees(cmath.phase(Vca)), 1)},
+                    "current": {"mag": round(abs(Ica), 3), "angle": round(math.degrees(cmath.phase(Ica)), 1)},
+                    "P": round(Sca.real, 2), "Q": round(Sca.imag, 2)
+                }
+            ]
+            neutral = {"mag": 0.0, "angle": 0.0} # No neutral wire in Delta
+
+        # S total
+        S_total = math.sqrt(P_total**2 + Q_total**2)
+        pf = P_total / S_total if S_total > 1e-6 else 1.0
+
+        # Capacitor sizing for Power Factor Correction (PFC)
+        # Target Q = P * tan(acos(target_pf))
+        # Required Qc = Q_total - Q_target
+        c_required_mfd = 0.0
+        q_target = 0.0
+        q_c = 0.0
+        if pf < t_pf and P_total > 0:
+            theta_old = math.acos(max(0.0, min(1.0, pf)))
+            theta_new = math.acos(max(0.0, min(1.0, t_pf)))
+            q_target = P_total * math.tan(theta_new)
+            q_c = max(0.0, Q_total - q_target)
+            
+            # Assuming Delta connected 3-phase capacitor bank
+            # Q_c_phase = Q_c / 3 = V_ll^2 * (2 * pi * f * C)
+            q_c_phase = q_c / 3.0
+            omega = 2.0 * math.pi * f
+            c_val = q_c_phase / (omega * V_ll**2) if omega * V_ll**2 > 1e-6 else 0.0
+            c_required_mfd = c_val * 1e6 # convert to microFarads
+
+        return {
+            "connection": req.connection,
+            "total_power": {
+                "P": round(P_total, 2),
+                "Q": round(Q_total, 2),
+                "S": round(S_total, 2),
+                "pf": round(pf, 3)
+            },
+            "pfc": {
+                "target_pf": t_pf,
+                "q_c_required_vars": round(q_c, 2),
+                "cap_per_phase_mfd": round(c_required_mfd, 2)
+            },
+            "phases": phases,
+            "neutral_current": neutral,
+            "line_currents": {
+                "Ia": {"mag": round(abs(Ia), 3), "angle": round(math.degrees(cmath.phase(Ia)), 1)},
+                "Ib": {"mag": round(abs(Ib), 3), "angle": round(math.degrees(cmath.phase(Ib)), 1)},
+                "Ic": {"mag": round(abs(Ic), 3), "angle": round(math.degrees(cmath.phase(Ic)), 1)}
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"3-phase analysis error: {str(e)}")

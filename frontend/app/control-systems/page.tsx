@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { Sliders, RefreshCw, BarChart2, Zap, Settings, Activity } from "lucide-react";
+import { Sliders, RefreshCw, BarChart2, Zap, Settings, Activity, Sparkles, Check, AlertCircle } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { useAuthStore } from "../../store/authStore";
 
 type AnalysisMode = "PID" | "Bode" | "StateSpace" | "Nyquist";
 type PlantType = "FirstOrder" | "SecondOrder";
@@ -11,6 +12,10 @@ export default function ControlSystemsStudio() {
   const [mode, setMode] = useState<AnalysisMode>("PID");
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<any | null>(null);
+  
+  // State-Space specific states
+  const [desiredPoles, setDesiredPoles] = useState("-4.0, -5.0");
+  const [placementError, setPlacementError] = useState<string | null>(null);
 
   // PID Parameters
   const [kp, setKp] = useState("2.5");
@@ -176,65 +181,138 @@ export default function ControlSystemsStudio() {
   };
 
   // Run State Space Simulation
-  const runStateSpaceSimulation = () => {
+  const runStateSpaceSimulation = async () => {
     setIsLoading(true);
-    setTimeout(() => {
-      const a11 = parseFloat(ssA11);
-      const a12 = parseFloat(ssA12);
-      const a21 = parseFloat(ssA21);
-      const a22 = parseFloat(ssA22);
-      const b1 = parseFloat(ssB1);
-      const b2 = parseFloat(ssB2);
-      const c1 = parseFloat(ssC1);
-      const c2 = parseFloat(ssC2);
-      const k1 = parseFloat(ssK1);
-      const k2 = parseFloat(ssK2);
-      const SP = parseFloat(ssSetpoint);
+    setPlacementError(null);
 
-      const t_stop = 6.0;
-      const dt = 0.01;
-      const steps = Math.round(t_stop / dt);
+    const a11 = parseFloat(ssA11);
+    const a12 = parseFloat(ssA12);
+    const a21 = parseFloat(ssA21);
+    const a22 = parseFloat(ssA22);
+    const b1 = parseFloat(ssB1);
+    const b2 = parseFloat(ssB2);
+    const c1 = parseFloat(ssC1);
+    const c2 = parseFloat(ssC2);
+    const k1 = parseFloat(ssK1);
+    const k2 = parseFloat(ssK2);
+    const SP = parseFloat(ssSetpoint);
 
-      const time: number[] = [];
-      const x1_arr: number[] = [];
-      const x2_arr: number[] = [];
-      const y_arr: number[] = [];
-      const sp_arr: number[] = [];
+    const token = useAuthStore.getState().token;
+    let ssMetrics: any = null;
 
-      let x1 = 0.0;
-      let x2 = 0.0;
-
-      for (let step = 0; step <= steps; step++) {
-        const t = step * dt;
-        time.push(parseFloat(t.toFixed(2)));
-        sp_arr.push(SP);
-        x1_arr.push(parseFloat(x1.toFixed(4)));
-        x2_arr.push(parseFloat(x2.toFixed(4)));
-
-        const y = c1 * x1 + c2 * x2;
-        y_arr.push(parseFloat(y.toFixed(4)));
-
-        let u = SP - (k1 * x1 + k2 * x2);
-        u = Math.max(-15, Math.min(15, u));
-
-        const dx1 = a11 * x1 + a12 * x2 + b1 * u;
-        const dx2 = a21 * x1 + a22 * x2 + b2 * u;
-
-        x1 += dx1 * dt;
-        x2 += dx2 * dt;
-      }
-
-      setResults({
-        waveforms: time.map((t, idx) => ({
-          time: t,
-          "Setpoint": sp_arr[idx],
-          "State x1 (Pos)": x1_arr[idx],
-          "State x2 (Vel)": x2_arr[idx],
-          "Output y": y_arr[idx]
-        }))
+    try {
+      const res = await fetch("http://localhost:8000/api/v1/control-systems/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          A: [[a11, a12], [a21, a22]],
+          B: [[b1], [b2]],
+          C: [[c1, c2]]
+        })
       });
-      setIsLoading(false);
-    }, 400);
+
+      if (res.ok) {
+        ssMetrics = await res.json();
+      }
+    } catch (err) {
+      console.warn("Backend state space analysis offline.");
+    }
+
+    const t_stop = 6.0;
+    const dt = 0.01;
+    const steps = Math.round(t_stop / dt);
+
+    const time: number[] = [];
+    const x1_arr: number[] = [];
+    const x2_arr: number[] = [];
+    const y_arr: number[] = [];
+    const sp_arr: number[] = [];
+
+    let x1 = 0.0;
+    let x2 = 0.0;
+
+    for (let step = 0; step <= steps; step++) {
+      const t = step * dt;
+      time.push(parseFloat(t.toFixed(2)));
+      sp_arr.push(SP);
+      x1_arr.push(parseFloat(x1.toFixed(4)));
+      x2_arr.push(parseFloat(x2.toFixed(4)));
+
+      const y = c1 * x1 + c2 * x2;
+      y_arr.push(parseFloat(y.toFixed(4)));
+
+      let u = SP - (k1 * x1 + k2 * x2);
+      u = Math.max(-15, Math.min(15, u));
+
+      const dx1 = a11 * x1 + a12 * x2 + b1 * u;
+      const dx2 = a21 * x1 + a22 * x2 + b2 * u;
+
+      x1 += dx1 * dt;
+      x2 += dx2 * dt;
+    }
+
+    setResults({
+      metrics: ssMetrics ? {
+        poles: ssMetrics.poles,
+        is_controllable: ssMetrics.is_controllable,
+        is_observable: ssMetrics.is_observable,
+        is_stable: ssMetrics.is_stable
+      } : null,
+      waveforms: time.map((t, idx) => ({
+        time: t,
+        "Setpoint": sp_arr[idx],
+        "State x1 (Pos)": x1_arr[idx],
+        "State x2 (Vel)": x2_arr[idx],
+        "Output y": y_arr[idx]
+      }))
+    });
+    setIsLoading(false);
+  };
+
+  const designPolePlacement = async () => {
+    setPlacementError(null);
+    const a11 = parseFloat(ssA11);
+    const a12 = parseFloat(ssA12);
+    const a21 = parseFloat(ssA21);
+    const a22 = parseFloat(ssA22);
+    const b1 = parseFloat(ssB1);
+    const b2 = parseFloat(ssB2);
+
+    const poles = desiredPoles.split(",").map(p => parseFloat(p.trim())).filter(p => !isNaN(p));
+    if (poles.length !== 2) {
+      setPlacementError("Specify exactly 2 desired poles (e.g. -4, -5).");
+      return;
+    }
+
+    const token = useAuthStore.getState().token;
+    try {
+      const res = await fetch("http://localhost:8000/api/v1/control-systems/design-pole", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          A: [[a11, a12], [a21, a22]],
+          B: [[b1], [b2]],
+          desired_poles: poles
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setSsK1(data.K[0].toFixed(3));
+        setSsK2(data.K[1].toFixed(3));
+      } else {
+        const errData = await res.json();
+        setPlacementError(errData.detail || "Design failed.");
+      }
+    } catch (err) {
+      setPlacementError("Failed to connect to backend server.");
+    }
   };
 
   // Run Nyquist Plot
@@ -418,6 +496,27 @@ export default function ControlSystemsStudio() {
                   </div>
                 </div>
               </div>
+              <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pole Placement Auto-Design</span>
+                <div>
+                  <label className="block font-bold text-slate-400 mb-0.5">Desired Poles (comma-separated)</label>
+                  <input type="text" value={desiredPoles} onChange={e => setDesiredPoles(e.target.value)} className="w-full p-1.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-mono text-center" />
+                </div>
+                {placementError && (
+                  <div className="text-[10px] text-rose-500 flex items-center space-x-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    <span>{placementError}</span>
+                  </div>
+                )}
+                <button
+                  onClick={designPolePlacement}
+                  className="w-full py-1 px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold flex items-center justify-center space-x-1 shadow-sm transition-all"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  <span>Compute Gains K</span>
+                </button>
+              </div>
+
               <div>
                 <label className="block font-bold text-slate-400 mb-1">Feedback Vector K</label>
                 <div className="grid grid-cols-2 gap-1.5 font-mono">
@@ -479,37 +578,70 @@ export default function ControlSystemsStudio() {
         {results ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
             {/* Transient performance metrics column */}
-            {mode === "PID" && (
+            {(mode === "PID" || (mode === "StateSpace" && results.metrics)) && (
               <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b pb-2 flex items-center space-x-1">
                   <Settings className="h-4 w-4" />
-                  <span>Transient Step Metrics</span>
+                  <span>System Analysis Metrics</span>
                 </h3>
                 
-                <div className="space-y-3 font-mono text-xs">
-                  <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
-                    <span className="text-[10px] text-slate-400 block font-bold">Max Overshoot (Mp)</span>
-                    <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">{results.metrics.overshoot} %</span>
+                {mode === "PID" ? (
+                  <div className="space-y-3 font-mono text-xs">
+                    <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold">Max Overshoot (Mp)</span>
+                      <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">{results.metrics.overshoot} %</span>
+                    </div>
+                    <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold">Settling Time (Ts, 2% band)</span>
+                      <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">{results.metrics.settling_time} s</span>
+                    </div>
+                    <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold">Rise Time (Tr, 10%-90%)</span>
+                      <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">{results.metrics.rise_time} s</span>
+                    </div>
+                    <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold">Steady-State Error</span>
+                      <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">{results.metrics.steady_state_error}</span>
+                    </div>
                   </div>
-                  <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
-                    <span className="text-[10px] text-slate-400 block font-bold">Settling Time (Ts, 2% band)</span>
-                    <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">{results.metrics.settling_time} s</span>
+                ) : (
+                  <div className="space-y-3 font-mono text-xs">
+                    <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold">Open-Loop Poles (s-plane)</span>
+                      <div className="space-y-0.5 mt-1">
+                        {results.metrics.poles.map((p: any, i: number) => (
+                          <div key={i} className="font-bold text-indigo-600 dark:text-indigo-400 text-xs">
+                            λ{i+1}: {p.real.toFixed(3)} {p.imag >= 0 ? "+" : "-"} j{Math.abs(p.imag).toFixed(3)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold">System Stability</span>
+                      <span className={`text-xs font-bold ${results.metrics.is_stable ? "text-emerald-500" : "text-rose-500"}`}>
+                        {results.metrics.is_stable ? "STABLE (LHP Poles)" : "UNSTABLE / MARGINAL"}
+                      </span>
+                    </div>
+                    <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold">Controllability</span>
+                      <span className={`text-xs font-bold ${results.metrics.is_controllable ? "text-emerald-500" : "text-rose-500"}`}>
+                        {results.metrics.is_controllable ? "FULL RANK (Controllable)" : "UNCONTROLLABLE"}
+                      </span>
+                    </div>
+                    <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold">Observability</span>
+                      <span className={`text-xs font-bold ${results.metrics.is_observable ? "text-emerald-500" : "text-rose-500"}`}>
+                        {results.metrics.is_observable ? "FULL RANK (Observable)" : "UNOBSERVABLE"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
-                    <span className="text-[10px] text-slate-400 block font-bold">Rise Time (Tr, 10%-90%)</span>
-                    <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">{results.metrics.rise_time} s</span>
-                  </div>
-                  <div className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/80 rounded-xl">
-                    <span className="text-[10px] text-slate-400 block font-bold">Steady-State Error</span>
-                    <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">{results.metrics.steady_state_error}</span>
-                  </div>
-                </div>
+                )}
               </div>
             )}
 
             {/* Graphs Column */}
             <div className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 ${
-              mode === "PID" ? "lg:col-span-2" : "lg:col-span-3"
+              (mode === "PID" || (mode === "StateSpace" && results.metrics)) ? "lg:col-span-2" : "lg:col-span-3"
             } h-96 flex flex-col`}>
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b pb-2 mb-3 flex items-center space-x-1.5">
                 <BarChart2 className="h-4.5 w-4.5" />

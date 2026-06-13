@@ -40,6 +40,8 @@ export default function Navbar() {
     { name: "PLC & SCADA", href: "/plc-scada", icon: Terminal },
     { name: "Analog & Digital", href: "/analog-digital", icon: Cpu },
     { name: "Motor Drive", href: "/motor-drive", icon: Sliders },
+    { name: "RF Smith Chart", href: "/smith-chart", icon: Activity },
+    { name: "Digital Logic", href: "/logic-gates", icon: Cpu },
     { name: "AI Assistant", href: "/ai-assistant", icon: Brain },
     { name: "Library", href: "/library", icon: BookOpen },
     { name: "Reports", href: "/reports", icon: FileText }

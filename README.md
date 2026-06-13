@@ -12,15 +12,19 @@ Founded and spearheaded by **Atharva Ravindra Tare**.
 - **Circuit Design Studio**: Drag-and-drop circuit editor with passive components, AC/DC/current sources, diodes, switches, and meters. Solved using Modified Nodal Analysis (MNA).
 - **Machine Studio**: Analysis of DC Motors, Induction Motors, Synchronous Motors, and Transformers using physical equivalent circuits.
 - **Power Electronics Workbench**: Modeling of controlled/uncontrolled rectifiers, square-wave/SPWM single-phase inverters, and Buck/Boost chopper converters.
-- **Power Systems Lab**: Transmission lines ABCD parameters calculators (Short, Medium, Long models), symmetrical/unsymmetrical fault current calculations, and Gauss-Seidel 3-bus load flow solvers.
+- **Power Systems Lab**: Transmission lines ABCD parameters calculators (Short, Medium, Long models), symmetrical/unsymmetrical fault current calculations, Gauss-Seidel 3-bus load flow solvers, and unbalanced Three-Phase Star/Delta phasor calculators with power factor corrector (PFC) sizing.
 - **Programmable PLC & SCADA Simulator**: Fully interactive Ladder Logic Builder with series Normally Open/Closed contacts, parallel latch branches, output coils, and On-Delay TON Timers, dynamically driving a real-time SVG SCADA water tank level simulation.
 - **Analog & Digital Workbench**: Solves RC components for active Sallen-Key Butterworth low-pass/high-pass filters, simulates R-2R DAC ladder networks, and simulates 3-bit Flash ADCs.
+- **RF Smith Chart Designer**: Interactive visual RF Smith Chart tool enabling constant resistance/reactance SVG rendering, impedance mapping, matching networks calculations (series/shunt L/C, transmission lines), and real-time reflection coefficient tracing.
+- **Digital Logic Gates Workbench**: Drag-and-drop digital logic builder simulating basic gates (AND, OR, NOT, NAND, NOR, XOR, XNOR) with dynamic truth tables and Line-series timing diagrams.
+- **Control Systems Studio**: Linear system state-space controllability/observability analyzer and pole placement (Ackermann's method) feedback gain solver.
 - **Motor Drive Studio**: Continuous ODE PID speed control simulation of a DC shunt motor under step torque disturbances.
 - **Fourier Signal Lab**: Time/Frequency domain analysis showing harmonic synthesis.
 - **AI Engineering Assistant**: Step-by-step mathematical nodal derivation, formula explanations, and fault detection (e.g. open circuit checks).
 - **Oscilloscope Waveforms**: Time-series charts representing transient voltage and current potentials using Recharts.
 - **Engineering PDF Reports**: Formatted ReportLab exports summarizing simulation outputs, math, and AI reviews.
 - **Secure Authentication**: Next-gen glassmorphic Login and Registration pages linked directly to FastAPI JWT database authentication endpoints (`/auth/register`, `/auth/login`, `/auth/me`).
+
 
 ---
 
@@ -61,15 +65,18 @@ ELECTRASIM/
 │   │   ├── schemas.py         # Pydantic validation schemas
 │   │   ├── ai/
 │   │   │   └── assistant.py   # AI Assistant & symbolic solver
+│   │   ├── control_systems/
+│   │   │   └── ss_solvers.py  # Controllability, observability, pole solvers
 │   │   ├── machines/          # DC, IM, SM, and Transformer models
 │   │   ├── power_electronics/ # Rectifiers, inverters, and choppers
 │   │   ├── power_systems/     # Transmission lines parameters and solvers
 │   │   ├── reports/
 │   │   │   └── pdf_generator.py # ReportLab PDF compiler
-│   │   └── routes/            # API routing submodules
+│   │   └── routes/            # API routing submodules (control_systems.py, etc.)
 │   ├── tests/
 │   │   ├── test_simulation.py # pytest verification cases
-│   │   └── test_power_systems.py
+│   │   ├── test_power_systems.py
+│   │   └── test_advanced_labs.py # pytest for control & advanced power systems
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── frontend/
@@ -82,6 +89,8 @@ ELECTRASIM/
 │   │   ├── analog-digital/    # Filters, DAC, and ADC designer
 │   │   ├── motor-drive/       # Closed-loop DC PID controller
 │   │   ├── fourier-lab/       # Fourier signal analyzer
+│   │   ├── smith-chart/       # Interactive RF Smith Chart builder
+│   │   ├── logic-gates/       # Drag-and-drop Digital Logic simulator
 │   │   ├── ai-assistant/      # AI copilot chat interface
 │   │   ├── library/           # Formula Reference index
 │   │   ├── reports/           # PDF compile dashboard
@@ -110,9 +119,13 @@ ELECTRASIM/
 
 ### 2. Simulation & Calculation Engines
 *   `POST /api/v1/circuits/solve` - Run MNA SPICE solver for DC/Transient analysis.
+*   `POST /api/v1/control-systems/analyze` - State-space controllability/observability/stability parameters.
+*   `POST /api/v1/control-systems/design-pole` - Pole placement gains $K$ via Ackermann's method.
 *   `POST /api/v1/power-systems/transmission` - Solve Short, Medium, Long line ABCD parameters.
 *   `POST /api/v1/power-systems/fault` - Compute symmetrical/unsymmetrical fault currents.
 *   `POST /api/v1/power-systems/load-flow` - Run Gauss-Seidel load flow equations on a 3-bus grid.
+*   `POST /api/v1/power-systems/three-phase` - Compute unbalanced/balanced phase and line parameter phasors.
+*   `POST /api/v1/power-systems/pfc` - Determine delta-connected capacitor values for target power factor correction.
 *   `POST /api/v1/reports/generate` - Compile engineering PDF sheets using ReportLab.
 
 ---
